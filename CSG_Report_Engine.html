@@ -8,6 +8,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/mammoth@1.6.0/mammoth.browser.min.js"></script>
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 :root{
@@ -178,6 +179,44 @@ html,body{height:100%;overflow:hidden;background:var(--bg);font-family:'DM Sans'
 .report-section-content{font-size:13px;color:var(--text2);line-height:1.7;white-space:pre-wrap}
 .report-section-empty{font-size:12px;color:var(--text3);font-style:italic;background:var(--bg);border-radius:6px;padding:12px 14px;border:1px dashed var(--border)}
 ::-webkit-scrollbar{width:6px}::-webkit-scrollbar-track{background:transparent}::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
+
+/* ── LIBRARY PANEL ── */
+.library-overlay{position:fixed;inset:0;z-index:50;display:flex;pointer-events:none;left:var(--sidebar-w)}
+.library-overlay.open{pointer-events:all}
+.library-backdrop{position:absolute;inset:0;background:rgba(0,0,0,.4);opacity:0;transition:opacity .2s}
+.library-overlay.open .library-backdrop{opacity:1}
+.library-panel{position:absolute;left:0;top:0;bottom:0;width:280px;background:var(--card);border-right:1px solid var(--border);display:flex;flex-direction:column;transform:translateX(-100%);transition:transform .25s cubic-bezier(.16,1,.3,1);box-shadow:4px 0 24px rgba(0,0,0,.12);z-index:51}
+.library-overlay.open .library-panel{transform:translateX(0)}
+.library-header{padding:16px 18px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;flex-shrink:0}
+.library-title{font-family:'Fraunces',serif;font-size:15px;font-weight:600;color:var(--text)}
+.library-close{background:var(--gray-xlight);border:none;cursor:pointer;width:28px;height:28px;border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:14px;color:var(--text2);transition:all .15s}
+.library-close:hover{background:var(--border);color:var(--text)}
+.library-body{flex:1;overflow-y:auto;padding:12px}
+.library-category{margin-bottom:16px}
+.library-category-label{font-size:9px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--text3);padding:4px 6px 8px;display:flex;align-items:center;gap:6px}
+.library-category-icon{font-size:14px}
+.library-section-card{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:8px;border:1px solid var(--border);background:var(--bg);margin-bottom:6px;cursor:pointer;transition:all .15s}
+.library-section-card:hover:not(.added){border-color:var(--orange);background:var(--orange-light)}
+.library-section-card.added{opacity:.4;cursor:default}
+.library-section-card-icon{font-size:16px;flex-shrink:0}
+.library-section-card-info{flex:1;min-width:0}
+.library-section-card-name{font-size:12px;font-weight:600;color:var(--text);line-height:1.2}
+.library-section-card-desc{font-size:10px;color:var(--text3);margin-top:2px;line-height:1.3}
+.library-section-card-add{width:22px;height:22px;border-radius:50%;background:var(--orange);color:white;border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0;transition:all .15s}
+.library-section-card.added .library-section-card-add{background:var(--green)}
+.library-section-card-add:hover{transform:scale(1.1)}
+
+/* ── DRAG SIDEBAR ── */
+.sb-add-btn{display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:7px;cursor:pointer;border:1px dashed rgba(232,135,30,.4);background:rgba(232,135,30,.05);width:100%;color:var(--orange);font-size:11px;font-weight:600;transition:all .15s}
+.sb-add-btn:hover{background:rgba(232,135,30,.12);border-color:var(--orange)}
+.sb-nav-item{overflow:hidden}
+.sb-nav-item .drag-handle{opacity:0;cursor:grab;color:var(--gray);font-size:11px;padding:0 2px;transition:opacity .15s;flex-shrink:0;user-select:none}
+.sb-nav-item:hover .drag-handle{opacity:.6}
+.sb-nav-item.drag-over-top{border-top:2px solid var(--orange)}
+.sb-nav-item.drag-over-bottom{border-bottom:2px solid var(--orange)}
+.sb-nav-item .section-remove{opacity:0;background:none;border:none;cursor:pointer;color:var(--gray);font-size:11px;width:0;padding:0;border-radius:3px;transition:all .15s;flex-shrink:0;overflow:hidden}
+.sb-nav-item:hover .section-remove{opacity:1;width:16px;padding:2px}
+.sb-nav-item .section-remove:hover{color:#ff6b6b}
 @media(max-width:700px){.shell{flex-direction:column}.sidebar{width:100%;min-width:0;flex-direction:row;height:auto}.sb-header,.sb-footer{display:none}.sb-nav{display:flex;flex-direction:row;padding:6px;gap:4px;overflow-x:auto}.sb-section-label,.nav-sub,.nav-status{display:none}.sb-nav-item{padding:6px 10px;flex-direction:column;gap:2px;min-width:60px;align-items:center}.form-grid,.two-col{grid-template-columns:1fr}.projects-grid{grid-template-columns:1fr}}
 </style>
 </head>
@@ -190,7 +229,7 @@ html,body{height:100%;overflow:hidden;background:var(--bg);font-family:'DM Sans'
 </div>
 
 <div class="shell" id="app-shell" style="display:none">
-  <aside class="sidebar">
+  <aside class="sidebar" style="position:relative">
     <div class="sb-header">
       <div class="sb-logo">
         <div class="sb-logo-mark"><svg viewBox="0 0 24 24"><path d="M12 2L2 19h20L12 2zm0 4l7 13H5L12 6z"/></svg></div>
@@ -202,13 +241,31 @@ html,body{height:100%;overflow:hidden;background:var(--bg);font-family:'DM Sans'
         <div class="sb-project-sub" id="sb-project-sub">—</div>
       </div>
     </div>
-    <nav class="sb-nav" id="sb-nav"></nav>
+
+    <nav class="sb-nav" id="sb-nav" style="flex:1;overflow-y:auto"></nav>
+
+    <div style="padding:8px 10px;flex-shrink:0;border-top:1px solid var(--dark3)" id="sb-add-wrap">
+      <button class="sb-add-btn" onclick="openLibrary()" id="sb-add-btn" style="display:none">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        Add Section
+      </button>
+    </div>
+
     <div class="sb-footer">
       <div class="progress-label"><span>Report completion</span><strong id="progress-pct">0%</strong></div>
       <div class="progress-bar-wrap"><div class="progress-bar-fill" id="progress-bar" style="width:0%"></div></div>
       <div class="save-indicator" id="save-indicator">All changes saved</div>
     </div>
   </aside>
+
+  <!-- Library drawer — slides out to the right of the sidebar -->
+  <div id="library-drawer" style="width:0;overflow:hidden;background:var(--dark2);border-right:1px solid var(--dark3);display:flex;flex-direction:column;transition:width .25s cubic-bezier(.16,1,.3,1);flex-shrink:0;z-index:9">
+    <div style="padding:14px 14px 10px;border-bottom:1px solid var(--dark3);display:flex;align-items:center;justify-content:space-between;flex-shrink:0;min-width:260px">
+      <div style="font-family:'Fraunces',serif;font-size:13px;font-weight:600;color:white">Section Library</div>
+      <button onclick="closeLibrary()" style="background:var(--dark3);border:none;color:var(--gray);width:26px;height:26px;border-radius:5px;cursor:pointer;font-size:13px;display:flex;align-items:center;justify-content:center" title="Close library">✕</button>
+    </div>
+    <div id="library-body" style="flex:1;overflow-y:auto;padding:8px;scrollbar-width:thin;scrollbar-color:var(--dark3) transparent;min-width:260px"></div>
+  </div>
 
   <main class="main" id="main-area">
     <div id="projects-view" style="display:none;flex:1;overflow-y:auto" class="projects-screen">
@@ -265,54 +322,144 @@ const SECTIONS = [
   {id:'setup',nav:'Project Setup',navSub:'Project & loan details',icon:'⚙',badge:'SETUP',title:'Project Setup',desc:'Enter the core project details. These populate the cover letter, section headers, and key financial figures throughout the report.',type:'form'},
   {id:'s1_group',type:'group',nav:'Section 1.0',navSub:'Budget, cost summaries & cash flow'},
   {id:'s1_1',nav:'1.1 Purpose of Report',navSub:'Static boilerplate',icon:'◎',badge:'SECTION 1.1',title:'1.1  Purpose of the Report',desc:'Standard CSG boilerplate confirming the purpose of the Preliminary Report. Carried forward unchanged.',type:'static',staticText:"The purpose of this report is to review the Borrowers' documentation, cost budgets, approvals, insurance and the like for the project and to provide an assessment of the same and make comments where appropriate. An assessment of probable cash flow is also undertaken."},
-  {id:'s1_2',nav:'1.2 Description of Project',navSub:'Site, building & scope',icon:'◎',badge:'SECTION 1.2',title:'1.2  Description of the Project',desc:'Upload drawings, site plans, or building plans. AI will generate a comprehensive project description.',accepts:'.pdf,.jpg,.jpeg,.png',acceptsLabel:'PDF · JPG · PNG',uploadTitle:'Site plan, building plans or drawings',prompt:`You are a professional Quantity Surveyor at CSG writing Section 1.2 (Description of the Project) of a Preliminary Mortgage Monitoring Report for an Alberta construction lender.\n\nWrite a comprehensive project description in CSG standard format as flowing paragraphs:\nP1 — Site location: address, community, city quadrant, site boundaries, legal description (Lot/Block/Plan), site area ft2.\nP2 — Building: development type, number/type of units, total GFA ft2.\nP3 — Structural: foundation, superstructure, roof.\nP4 — Exterior: cladding, windows, roofing, soffits.\nP5 — Interior: partitions, finishes, floor coverings, kitchen/bath, mechanical, electrical.\nP6 — Site works: services, landscaping, parking, fencing.\nCLOSING: "Reduced copies of the Site Plan and Building Plans & Elevations are provided as Appendix 'A' of this Preliminary Report for reference."\nUse [brackets] for unknowns. 300-400 words.`},
+  {id:'s1_2',nav:'1.2 Description of Project',navSub:'Site, building & scope',icon:'◎',badge:'SECTION 1.2',title:'1.2  Description of the Project',desc:'Upload drawings, site plans, or building plans. AI will generate a comprehensive project description.',accepts:'.pdf,.jpg,.jpeg,.png,.docx',acceptsLabel:'PDF · JPG · PNG · DOCX',uploadTitle:'Site plan, building plans or drawings',prompt:`You are a professional Quantity Surveyor at CSG writing Section 1.2 (Description of the Project) of a Preliminary Mortgage Monitoring Report for an Alberta construction lender.\n\nWrite a comprehensive project description in CSG standard format as flowing paragraphs:\nP1 — Site location: address, community, city quadrant, site boundaries, legal description (Lot/Block/Plan), site area ft2.\nP2 — Building: development type, number/type of units, total GFA ft2.\nP3 — Structural: foundation, superstructure, roof.\nP4 — Exterior: cladding, windows, roofing, soffits.\nP5 — Interior: partitions, finishes, floor coverings, kitchen/bath, mechanical, electrical.\nP6 — Site works: services, landscaping, parking, fencing.\nCLOSING: "Reduced copies of the Site Plan and Building Plans & Elevations are provided as Appendix 'A' of this Preliminary Report for reference."\nUse [brackets] for unknowns. 300-400 words.`},
   {id:'s1_3',nav:'1.3 Methodology',navSub:'Static boilerplate',icon:'◎',badge:'SECTION 1.3',title:'1.3  Methodology',desc:'Standard CSG methodology statement. Pre-populated boilerplate.',type:'static',staticText:'We have reviewed the information provided by the Borrower. We have discussed construction and soft costs and checked the available information. We have also discussed schedule, approvals, bonding, insurance and other general matters relating to the project.'},
-  {id:'s1_4',nav:"1.4 Borrower's Budget",navSub:'Budget reconciliation',icon:'◎',badge:'SECTION 1.4',title:"1.4  Borrower's Project Budget",desc:"Upload the Borrower's project budget (Excel or PDF). AI will write the budget reconciliation commentary.",accepts:'.pdf,.xlsx,.xls,.csv',acceptsLabel:'PDF · XLSX · CSV',uploadTitle:"Borrower's project budget",prompt:`Write Section 1.4 (Borrower's Project Budget). Opening confirming total confirmed budget. Summary table: Construction, Land, Soft Costs, Finance Fees, Contingency, Interest Reserve, GST, Project Costs, Less Borrower Equity, Net Loan Amount, Total Loan Amount. Closing referencing Appendix 'B' and 'C'. Use actual figures; [brackets] for unknowns. Professional, third-person.`},
-  {id:'s1_5',nav:'1.5 Project Budget Review',navSub:'Cost category commentary',icon:'◎',badge:'SECTION 1.5',title:'1.5  Project Budget Review',desc:'Upload the project budget or GC contract. AI will generate commentary on each cost category.',accepts:'.pdf,.xlsx,.xls,.csv',acceptsLabel:'PDF · XLSX · CSV',uploadTitle:'Project budget or cost analysis',prompt:`Write Section 1.5 (Project Budget Review) with bold subsection headings: 1.5.1 Construction Budget (amount, contract type, contractor, cost/ft2, reasonableness). 1.5.2 Land Cost. Then 1.5.3–1.5.13 for each soft cost visible. 1.5.15 Conclusion (standard CSG feasibility closing). Professional, detailed.`},
-  {id:'s1_6',nav:'1.6 Construction Cost Summary',navSub:'Trade-by-trade table',icon:'◎',badge:'SECTION 1.6',title:'1.6  Construction Cost Summary',desc:'Upload the COSTSUM workbook or CCDC Application for Payment.',accepts:'.pdf,.xlsx,.xls,.csv',acceptsLabel:'PDF · XLSX · CSV',uploadTitle:'COSTSUM workbook or CCDC Application',prompt:`Write Section 1.6 narrative (2-3 paragraphs): (1) summary prepared from GC Schedule of Values/CCDC; (2) notable trades (100% complete, 0% not started, overall % complete, cost-to-complete reasonableness); (3) change orders if any. Preliminary: all trades at 0%. 100-150 words.`},
-  {id:'s1_7',nav:'1.7 Capital Cost Summary',navSub:'Full project cost rollup',icon:'◎',badge:'SECTION 1.7',title:'1.7  Capital Cost Summary',desc:'Upload the COSTSUM workbook or budget.',accepts:'.pdf,.xlsx,.xls,.csv',acceptsLabel:'PDF · XLSX · CSV',uploadTitle:'COSTSUM workbook or capital cost document',prompt:`Write Section 1.7 narrative (80-120 words): total project cost, funding split (loan vs. equity), confirm loan ties to authorized credit, contingency check (% of estimated cost to complete). Short, factual.`},
-  {id:'s1_8',nav:'1.8 Loan Calculation Check',navSub:'Advance reconciliation',icon:'◎',badge:'SECTION 1.8',title:'1.8  Loan Calculation Check',desc:"Upload the Loan Calculation Check or Borrower's Request for Advance.",accepts:'.pdf,.xlsx,.xls',acceptsLabel:'PDF · XLSX',uploadTitle:'Loan Calculation Check or draw request',prompt:`Write Section 1.8 narrative (80-120 words): confirm total project cost/equity/work in place, state Potential Loan Amount Due, confirm Financing Requirement aligns with authorized loan, note interest accrued. Professional, concise.`},
-  {id:'s1_9',nav:'1.9 Anticipated Cash Flow',navSub:'Monthly draw schedule',icon:'◎',badge:'SECTION 1.9',title:'1.9  Anticipated Cash Flow',desc:'Upload the CASHFLOW workbook or cash flow schedule.',accepts:'.pdf,.xlsx,.xls,.csv',acceptsLabel:'PDF · XLSX · CSV',uploadTitle:'CASHFLOW workbook',prompt:`Write Section 1.9 narrative (80-120 words): cash flow based on construction schedule, projected total interest to completion + tail period, interest rate used, compare projected vs. budgeted interest, adequacy conclusion. Professional, concise.`},
+  {id:'s1_4',nav:"1.4 Borrower's Budget",navSub:'Budget reconciliation',icon:'◎',badge:'SECTION 1.4',title:"1.4  Borrower's Project Budget",desc:"Upload the Borrower's project budget (Excel or PDF). AI will write the budget reconciliation commentary.",accepts:'.pdf,.xlsx,.xls,.csv,.docx',acceptsLabel:'PDF · XLSX · CSV · DOCX',uploadTitle:"Borrower's project budget",prompt:`Write Section 1.4 (Borrower's Project Budget). Opening confirming total confirmed budget. Summary table: Construction, Land, Soft Costs, Finance Fees, Contingency, Interest Reserve, GST, Project Costs, Less Borrower Equity, Net Loan Amount, Total Loan Amount. Closing referencing Appendix 'B' and 'C'. Use actual figures; [brackets] for unknowns. Professional, third-person.`},
+  {id:'s1_5',nav:'1.5 Project Budget Review',navSub:'Cost category commentary',icon:'◎',badge:'SECTION 1.5',title:'1.5  Project Budget Review',desc:'Upload the project budget or GC contract. AI will generate commentary on each cost category.',accepts:'.pdf,.xlsx,.xls,.csv,.docx',acceptsLabel:'PDF · XLSX · CSV · DOCX',uploadTitle:'Project budget or cost analysis',prompt:`Write Section 1.5 (Project Budget Review) with bold subsection headings: 1.5.1 Construction Budget (amount, contract type, contractor, cost/ft2, reasonableness). 1.5.2 Land Cost. Then 1.5.3–1.5.13 for each soft cost visible. 1.5.15 Conclusion (standard CSG feasibility closing). Professional, detailed.`},
+  {id:'s1_6',nav:'1.6 Construction Cost Summary',navSub:'Trade-by-trade table',icon:'◎',badge:'SECTION 1.6',title:'1.6  Construction Cost Summary',desc:'Upload the COSTSUM workbook or CCDC Application for Payment.',accepts:'.pdf,.xlsx,.xls,.csv,.docx',acceptsLabel:'PDF · XLSX · CSV · DOCX',uploadTitle:'COSTSUM workbook or CCDC Application',prompt:`Write Section 1.6 narrative (2-3 paragraphs): (1) summary prepared from GC Schedule of Values/CCDC; (2) notable trades (100% complete, 0% not started, overall % complete, cost-to-complete reasonableness); (3) change orders if any. Preliminary: all trades at 0%. 100-150 words.`},
+  {id:'s1_7',nav:'1.7 Capital Cost Summary',navSub:'Full project cost rollup',icon:'◎',badge:'SECTION 1.7',title:'1.7  Capital Cost Summary',desc:'Upload the COSTSUM workbook or budget.',accepts:'.pdf,.xlsx,.xls,.csv,.docx',acceptsLabel:'PDF · XLSX · CSV · DOCX',uploadTitle:'COSTSUM workbook or capital cost document',prompt:`Write Section 1.7 narrative (80-120 words): total project cost, funding split (loan vs. equity), confirm loan ties to authorized credit, contingency check (% of estimated cost to complete). Short, factual.`},
+  {id:'s1_8',nav:'1.8 Loan Calculation Check',navSub:'Advance reconciliation',icon:'◎',badge:'SECTION 1.8',title:'1.8  Loan Calculation Check',desc:"Upload the Loan Calculation Check or Borrower's Request for Advance.",accepts:'.pdf,.xlsx,.xls,.docx',acceptsLabel:'PDF · XLSX · DOCX',uploadTitle:'Loan Calculation Check or draw request',prompt:`Write Section 1.8 narrative (80-120 words): confirm total project cost/equity/work in place, state Potential Loan Amount Due, confirm Financing Requirement aligns with authorized loan, note interest accrued. Professional, concise.`},
+  {id:'s1_9',nav:'1.9 Anticipated Cash Flow',navSub:'Monthly draw schedule',icon:'◎',badge:'SECTION 1.9',title:'1.9  Anticipated Cash Flow',desc:'Upload the CASHFLOW workbook or cash flow schedule.',accepts:'.pdf,.xlsx,.xls,.csv,.docx',acceptsLabel:'PDF · XLSX · CSV · DOCX',uploadTitle:'CASHFLOW workbook',prompt:`Write Section 1.9 narrative (80-120 words): cash flow based on construction schedule, projected total interest to completion + tail period, interest rate used, compare projected vs. budgeted interest, adequacy conclusion. Professional, concise.`},
   {id:'s2_group',type:'group',nav:'Section 2.0',navSub:'Funding conditions & documentation'},
-  {id:'s2_1',nav:'2.1 Funding Conditions',navSub:'Lender term sheet / CMHC',icon:'◎',badge:'SECTION 2.1',title:'2.1  Funding Conditions',desc:"Upload the lender's term sheet, commitment letter, or CMHC Certificate of Insurance.",accepts:'.pdf,.jpg,.jpeg,.png',acceptsLabel:'PDF · JPG · PNG',uploadTitle:'Lender term sheet or CMHC COI',prompt:`Write Section 2.1 (Funding Conditions). State document received, issuer, date, key loan/insurance parameters. Appendix reference. If CMHC COI: note CMHC requirements CSG addresses in subsequent sections. 60-100 words.`},
-  {id:'s2_2_1',nav:'2.2.1 Drawings & Specifications',navSub:'Architectural drawings review',icon:'◎',badge:'SECTION 2.2.1',title:'2.2.1  Drawings and Specifications',desc:'Upload the architectural drawings, site plan, or building permit drawings.',accepts:'.pdf,.jpg,.jpeg,.png',acceptsLabel:'PDF · JPG · PNG',uploadTitle:'Architectural drawings or site plan',prompt:`Write Section 2.2.1 (Drawings and Specifications): (1) CSG has reviewed drawings/specs as provided by Borrower; (2) table: Discipline | Consultant | Drawing Status; (3) standard CSG adequacy/zoning compliance confirmation; (4) reduced copies in Appendix 'A'. Use [brackets] for unknowns.`},
-  {id:'s2_2_2',nav:'2.2.2 Construction Contract',navSub:'Fixed price / stipulated sum',icon:'◎',badge:'SECTION 2.2.2',title:'2.2.2  Construction Stipulated Price Contract',desc:'Upload the CCDC 14, CCDC 2, or Fixed Price Construction Contract.',accepts:'.pdf,.xlsx,.xls',acceptsLabel:'PDF · XLSX',uploadTitle:'Construction contract',prompt:`Write Section 2.2.2 (Construction Stipulated Price Contract): fixed-price requirement confirmation; Borrower engaged [contractor] for stipulated sum $[X] plus GST; sub-trade contracts note; "no known concerns" confirmation; appendix reference. 100-150 words.`},
-  {id:'s2_2_3',nav:'2.2.3 Sub-Trades & Bonding',navSub:'Trade contractors & bonds',icon:'◎',badge:'SECTION 2.2.3',title:'2.2.3  Major Sub-Trades and Contract Bonding',desc:'Upload the schedule of trade contractors or bonding documents.',accepts:'.pdf,.xlsx,.xls',acceptsLabel:'PDF · XLSX',uploadTitle:'Trade contractor schedule or bonding documents',prompt:`Write Section 2.2.3 (Sub-Trades and Bonding): bonding requirement; obtained or waiver (if waiver: standard CSG waiver support language); appendix reference. 80-120 words.`},
+  {id:'s2_1',nav:'2.1 Funding Conditions',navSub:'Lender term sheet / CMHC',icon:'◎',badge:'SECTION 2.1',title:'2.1  Funding Conditions',desc:"Upload the lender's term sheet, commitment letter, or CMHC Certificate of Insurance.",accepts:'.pdf,.jpg,.jpeg,.png,.docx',acceptsLabel:'PDF · JPG · PNG · DOCX',uploadTitle:'Lender term sheet or CMHC COI',prompt:`Write Section 2.1 (Funding Conditions). State document received, issuer, date, key loan/insurance parameters. Appendix reference. If CMHC COI: note CMHC requirements CSG addresses in subsequent sections. 60-100 words.`},
+  {id:'s2_2_1',nav:'2.2.1 Drawings & Specifications',navSub:'Architectural drawings review',icon:'◎',badge:'SECTION 2.2.1',title:'2.2.1  Drawings and Specifications',desc:'Upload the architectural drawings, site plan, or building permit drawings.',accepts:'.pdf,.jpg,.jpeg,.png,.docx',acceptsLabel:'PDF · JPG · PNG · DOCX',uploadTitle:'Architectural drawings or site plan',prompt:`Write Section 2.2.1 (Drawings and Specifications): (1) CSG has reviewed drawings/specs as provided by Borrower; (2) table: Discipline | Consultant | Drawing Status; (3) standard CSG adequacy/zoning compliance confirmation; (4) reduced copies in Appendix 'A'. Use [brackets] for unknowns.`},
+  {id:'s2_2_2',nav:'2.2.2 Construction Contract',navSub:'Fixed price / stipulated sum',icon:'◎',badge:'SECTION 2.2.2',title:'2.2.2  Construction Stipulated Price Contract',desc:'Upload the CCDC 14, CCDC 2, or Fixed Price Construction Contract.',accepts:'.pdf,.xlsx,.xls,.docx',acceptsLabel:'PDF · XLSX · DOCX',uploadTitle:'Construction contract',prompt:`Write Section 2.2.2 (Construction Stipulated Price Contract): fixed-price requirement confirmation; Borrower engaged [contractor] for stipulated sum $[X] plus GST; sub-trade contracts note; "no known concerns" confirmation; appendix reference. 100-150 words.`},
+  {id:'s2_2_3',nav:'2.2.3 Sub-Trades & Bonding',navSub:'Trade contractors & bonds',icon:'◎',badge:'SECTION 2.2.3',title:'2.2.3  Major Sub-Trades and Contract Bonding',desc:'Upload the schedule of trade contractors or bonding documents.',accepts:'.pdf,.xlsx,.xls,.docx',acceptsLabel:'PDF · XLSX · DOCX',uploadTitle:'Trade contractor schedule or bonding documents',prompt:`Write Section 2.2.3 (Sub-Trades and Bonding): bonding requirement; obtained or waiver (if waiver: standard CSG waiver support language); appendix reference. 80-120 words.`},
   {id:'s2_2_4',nav:'2.2.4 Construction Schedule',navSub:'Project timeline',icon:'◎',badge:'SECTION 2.2.4',title:'2.2.4  Construction Schedule',desc:"Upload the Borrower's construction schedule.",accepts:'.pdf,.xlsx,.xls,.jpg,.jpeg,.png',acceptsLabel:'PDF · XLSX · JPG',uploadTitle:'Construction schedule',prompt:`Write Section 2.2.4 (Construction Schedule): start and completion dates, reasonableness assessment, standard weather/labour/supply caution, appendix reference. Use [brackets] if dates not visible. 60-80 words.`},
-  {id:'s2_2_5',nav:'2.2.5 Purchase Contract',navSub:'Land / property purchase',icon:'◎',badge:'SECTION 2.2.5',title:'2.2.5  Residential / Commercial Purchase Contract',desc:'Upload the purchase and sale agreement.',accepts:'.pdf,.jpg,.jpeg,.png',acceptsLabel:'PDF · JPG · PNG',uploadTitle:'Purchase and sale agreement',prompt:`Write Section 2.2.5 (Purchase Contract): purchaser, vendor, legal description, purchase price, date. Appendix reference. If leasehold: note lease details. 40-60 words.`},
-  {id:'s2_2_6',nav:'2.2.6 Certificate of Title',navSub:'Land title confirmation',icon:'◎',badge:'SECTION 2.2.6',title:'2.2.6  Certificate of Title',desc:'Upload the Certificate of Title (ARLO search).',accepts:'.pdf,.jpg,.jpeg,.png',acceptsLabel:'PDF · JPG · PNG',uploadTitle:'Certificate of Title (ARLO search)',prompt:`Write Section 2.2.6 (Certificate of Title): ARLO number, owner, legal description, most recent transfer, caveats/encumbrances (flag if lender should be aware), clean title statement if applicable, appendix reference. 80-120 words.`},
-  {id:'s2_2_7',nav:'2.2.7 Site Survey',navSub:'Land / design survey',icon:'◎',badge:'SECTION 2.2.7',title:'2.2.7  Site Survey',desc:'Upload the site survey or real property report.',accepts:'.pdf,.jpg,.jpeg,.png',acceptsLabel:'PDF · JPG · PNG',uploadTitle:'Site survey or real property report',prompt:`Write Section 2.2.7 (Site Survey): type and firm, cost note, further surveys expected (Setting Out Survey note), appendix reference. 60-80 words.`},
-  {id:'s2_2_8',nav:'2.2.8 Geotechnical Report',navSub:'Geotech investigation',icon:'◎',badge:'SECTION 2.2.8',title:'2.2.8  Geotechnical Investigation',desc:'Upload the geotechnical report, or generate without upload for standard "not provided" commentary.',accepts:'.pdf',acceptsLabel:'PDF',uploadTitle:'Geotechnical investigation report',prompt:`Write Section 2.2.8 (Geotechnical Investigation). If report provided: firm, date, key recommendations, "no known concerns", appendix reference. If no report: standard CSG "not provided" commentary (structural engineer assessed site, absence not unusual for this project type). 60-100 words.`},
-  {id:'s2_2_9',nav:'2.2.9 Environmental (Phase I ESA)',navSub:'Phase I environmental assessment',icon:'◎',badge:'SECTION 2.2.9',title:'2.2.9  Environmental Site Assessment',desc:'Upload the Phase I Environmental Site Assessment report.',accepts:'.pdf',acceptsLabel:'PDF',uploadTitle:'Phase I Environmental Site Assessment',prompt:`Write Section 2.2.9 (Environmental Site Assessment): report reference, date, firm, client; key executive summary finding (quoted conclusion 1-2 sentences); site history note; "no known concerns"; appendix reference. 80-120 words.`},
-  {id:'s2_2_10',nav:'2.2.10 Development Permit',navSub:'City of Calgary / Edmonton DP',icon:'◎',badge:'SECTION 2.2.10',title:'2.2.10  Development Permit',desc:'Upload the Development Permit.',accepts:'.pdf,.jpg,.jpeg,.png',acceptsLabel:'PDF · JPG · PNG',uploadTitle:'Development Permit',prompt:`Write Section 2.2.10 (Development Permit): permit number, dates, issuing authority; authorized scope; commencement deadline; conditions note (typical for this project type); appendix reference. 80-120 words.`},
-  {id:'s2_2_11',nav:'2.2.11–13 Levies & Deposits',navSub:'Off-site levy, address, deposits',icon:'◎',badge:'SECTION 2.2.11–13',title:'2.2.11–2.2.13  Address Assignment, Off-Site Levy & Security Deposits',desc:'Upload municipal levy agreements, address assignment notices, or security deposit correspondence.',accepts:'.pdf,.jpg,.jpeg,.png',acceptsLabel:'PDF · JPG · PNG',uploadTitle:'Address assignment, levy agreement or security deposits',prompt:`Write Sections 2.2.11–2.2.13. For each document: 2.2.11 Address Assignment (old→new, appendix ref); 2.2.12 Off-Site Levy (parties, date, amount, appendix ref); 2.2.13 Security Deposits (date, refundable amount, appendix ref). Omit any not provided. 30-50 words per subsection.`},
-  {id:'s2_2_14',nav:'2.2.14 Building Permit',navSub:'Municipal building permit',icon:'◎',badge:'SECTION 2.2.14',title:'2.2.14  Building Permit',desc:'Upload the Building Permit.',accepts:'.pdf,.jpg,.jpeg,.png',acceptsLabel:'PDF · JPG · PNG',uploadTitle:'Building Permit',prompt:`Write Section 2.2.14 (Building Permit): permit number, issue date, plans examiner; scope (building type, units, area/storeys, occupancy, sprinklered); building code edition; appendix reference. 80-120 words.`},
-  {id:'s2_2_15',nav:'2.2.15 Certificate of Insurance',navSub:'Construction & builders risk',icon:'◎',badge:'SECTION 2.2.15',title:'2.2.15  Certificate of Insurance',desc:'Upload the Certificate of Insurance (builders risk, GL, or CMHC COI).',accepts:'.pdf,.jpg,.jpeg,.png',acceptsLabel:'PDF · JPG · PNG',uploadTitle:'Certificate of Insurance or CMHC COI',prompt:`Write Section 2.2.15 (Certificate of Insurance). If CMHC COI: list all key parameters (Approved Lender, Borrower, Net Housing Loan, CMHC Premium, Total Loan, Units, First/Final Advance Dates). If Construction Insurance: insured, coverages and limits, expiry, lender as Certificate Holder/Additional Insured/First Loss Payee, flag if expiry within 60 days. Appendix reference. 80-150 words.`},
-  {id:'s2_2_16',nav:'2.2.16 New Home Registration',navSub:'NHW / rental use designation',icon:'◎',badge:'SECTION 2.2.16',title:'2.2.16  New Home Registration',desc:'Upload the New Home Warranty registration or approved rental use designation.',accepts:'.pdf,.jpg,.jpeg,.png',acceptsLabel:'PDF · JPG · PNG',uploadTitle:'New Home Warranty or rental use designation',prompt:`Write Section 2.2.16 (New Home Registration): document type, provider/issuer, key details (certificate number, units covered). Appendix reference. 40-60 words.`},
-  {id:'s2_2_17',nav:'2.2.17 Property Tax',navSub:'Tax bill & proof of payment',icon:'◎',badge:'SECTION 2.2.17',title:'2.2.17  Property Tax',desc:'Upload the Property Tax Bill and/or proof of payment.',accepts:'.pdf,.jpg,.jpeg,.png',acceptsLabel:'PDF · JPG · PNG',uploadTitle:'Property Tax Bill and proof of payment',prompt:`Write Section 2.2.17 (Property Tax): address, legal description, owner, assessment, annual tax + due date. If paid: confirm in full. If unpaid: flag outstanding, recommend Lender confirm prior to funding. Appendix reference. 60-100 words.`},
-  {id:'s2_2_18',nav:'2.2.18 Design Consultants',navSub:'Consultant agreements',icon:'◎',badge:'SECTION 2.2.18',title:'2.2.18  Design Consultants',desc:'Upload consultant engagement letters or agreements.',accepts:'.pdf,.xlsx,.xls',acceptsLabel:'PDF · XLSX',uploadTitle:'Consultant agreements or engagement letters',prompt:`Write Section 2.2.18 (Design Consultants). For each: firm, discipline, engagement date, fee. Format: "We note that [Firm] has been engaged by the Borrower as [Discipline] under an agreement dated [date]. The design fee is $[X] plus GST." Appendix reference. 20-40 words per consultant.`},
-  {id:'s2_2_19',nav:'2.2.19 Appraisal',navSub:'As-completed valuation',icon:'◎',badge:'SECTION 2.2.19',title:'2.2.19  Appraisal',desc:'Upload the appraisal report or executive summary.',accepts:'.pdf',acceptsLabel:'PDF',uploadTitle:'Appraisal report or executive summary',prompt:`Write Section 2.2.19 (Appraisal): firm, appraiser/designation (AACI), reference, report/effective date. List each valuation approach and result (Cost, Income Direct Cap with cap rate, Income GIM, Direct Comparison, Final As-Completed Value). If rental: monthly rates and NOI. Standard "provided directly to Lender" closing. Appendix reference. 120-180 words.`},
-  {id:'s2_2_20',nav:"2.2.20 Borrower's Equity",navSub:'Equity confirmation',icon:'◎',badge:'SECTION 2.2.20',title:"2.2.20  Borrower's Equity",desc:'Upload the equity confirmation document or mortgage statement.',accepts:'.pdf,.xlsx,.xls',acceptsLabel:'PDF · XLSX',uploadTitle:'Equity confirmation or mortgage statement',prompt:`Write Section 2.2.20 (Borrower's Equity): equity requirement, equity composition (land equity via mortgage and land value, or cash equity), confirm equity within appraised value. If cash equity: injection timing. Appendix reference. 60-80 words.`},
+  {id:'s2_2_5',nav:'2.2.5 Purchase Contract',navSub:'Land / property purchase',icon:'◎',badge:'SECTION 2.2.5',title:'2.2.5  Residential / Commercial Purchase Contract',desc:'Upload the purchase and sale agreement.',accepts:'.pdf,.jpg,.jpeg,.png,.docx',acceptsLabel:'PDF · JPG · PNG · DOCX',uploadTitle:'Purchase and sale agreement',prompt:`Write Section 2.2.5 (Purchase Contract): purchaser, vendor, legal description, purchase price, date. Appendix reference. If leasehold: note lease details. 40-60 words.`},
+  {id:'s2_2_6',nav:'2.2.6 Certificate of Title',navSub:'Land title confirmation',icon:'◎',badge:'SECTION 2.2.6',title:'2.2.6  Certificate of Title',desc:'Upload the Certificate of Title (ARLO search).',accepts:'.pdf,.jpg,.jpeg,.png,.docx',acceptsLabel:'PDF · JPG · PNG · DOCX',uploadTitle:'Certificate of Title (ARLO search)',prompt:`Write Section 2.2.6 (Certificate of Title): ARLO number, owner, legal description, most recent transfer, caveats/encumbrances (flag if lender should be aware), clean title statement if applicable, appendix reference. 80-120 words.`},
+  {id:'s2_2_7',nav:'2.2.7 Site Survey',navSub:'Land / design survey',icon:'◎',badge:'SECTION 2.2.7',title:'2.2.7  Site Survey',desc:'Upload the site survey or real property report.',accepts:'.pdf,.jpg,.jpeg,.png,.docx',acceptsLabel:'PDF · JPG · PNG · DOCX',uploadTitle:'Site survey or real property report',prompt:`Write Section 2.2.7 (Site Survey): type and firm, cost note, further surveys expected (Setting Out Survey note), appendix reference. 60-80 words.`},
+  {id:'s2_2_8',nav:'2.2.8 Geotechnical Report',navSub:'Geotech investigation',icon:'◎',badge:'SECTION 2.2.8',title:'2.2.8  Geotechnical Investigation',desc:'Upload the geotechnical report, or generate without upload for standard "not provided" commentary.',accepts:'.pdf,.docx',acceptsLabel:'PDF · DOCX',uploadTitle:'Geotechnical investigation report',prompt:`Write Section 2.2.8 (Geotechnical Investigation). If report provided: firm, date, key recommendations, "no known concerns", appendix reference. If no report: standard CSG "not provided" commentary (structural engineer assessed site, absence not unusual for this project type). 60-100 words.`},
+  {id:'s2_2_9',nav:'2.2.9 Environmental (Phase I ESA)',navSub:'Phase I environmental assessment',icon:'◎',badge:'SECTION 2.2.9',title:'2.2.9  Environmental Site Assessment',desc:'Upload the Phase I Environmental Site Assessment report.',accepts:'.pdf,.docx',acceptsLabel:'PDF · DOCX',uploadTitle:'Phase I Environmental Site Assessment',prompt:`Write Section 2.2.9 (Environmental Site Assessment): report reference, date, firm, client; key executive summary finding (quoted conclusion 1-2 sentences); site history note; "no known concerns"; appendix reference. 80-120 words.`},
+  {id:'s2_2_10',nav:'2.2.10 Development Permit',navSub:'City of Calgary / Edmonton DP',icon:'◎',badge:'SECTION 2.2.10',title:'2.2.10  Development Permit',desc:'Upload the Development Permit.',accepts:'.pdf,.jpg,.jpeg,.png,.docx',acceptsLabel:'PDF · JPG · PNG · DOCX',uploadTitle:'Development Permit',prompt:`Write Section 2.2.10 (Development Permit): permit number, dates, issuing authority; authorized scope; commencement deadline; conditions note (typical for this project type); appendix reference. 80-120 words.`},
+  {id:'s2_2_11',nav:'2.2.11–13 Levies & Deposits',navSub:'Off-site levy, address, deposits',icon:'◎',badge:'SECTION 2.2.11–13',title:'2.2.11–2.2.13  Address Assignment, Off-Site Levy & Security Deposits',desc:'Upload municipal levy agreements, address assignment notices, or security deposit correspondence.',accepts:'.pdf,.jpg,.jpeg,.png,.docx',acceptsLabel:'PDF · JPG · PNG · DOCX',uploadTitle:'Address assignment, levy agreement or security deposits',prompt:`Write Sections 2.2.11–2.2.13. For each document: 2.2.11 Address Assignment (old→new, appendix ref); 2.2.12 Off-Site Levy (parties, date, amount, appendix ref); 2.2.13 Security Deposits (date, refundable amount, appendix ref). Omit any not provided. 30-50 words per subsection.`},
+  {id:'s2_2_14',nav:'2.2.14 Building Permit',navSub:'Municipal building permit',icon:'◎',badge:'SECTION 2.2.14',title:'2.2.14  Building Permit',desc:'Upload the Building Permit.',accepts:'.pdf,.jpg,.jpeg,.png,.docx',acceptsLabel:'PDF · JPG · PNG · DOCX',uploadTitle:'Building Permit',prompt:`Write Section 2.2.14 (Building Permit): permit number, issue date, plans examiner; scope (building type, units, area/storeys, occupancy, sprinklered); building code edition; appendix reference. 80-120 words.`},
+  {id:'s2_2_15',nav:'2.2.15 Certificate of Insurance',navSub:'Construction & builders risk',icon:'◎',badge:'SECTION 2.2.15',title:'2.2.15  Certificate of Insurance',desc:'Upload the Certificate of Insurance (builders risk, GL, or CMHC COI).',accepts:'.pdf,.jpg,.jpeg,.png,.docx',acceptsLabel:'PDF · JPG · PNG · DOCX',uploadTitle:'Certificate of Insurance or CMHC COI',prompt:`Write Section 2.2.15 (Certificate of Insurance). If CMHC COI: list all key parameters (Approved Lender, Borrower, Net Housing Loan, CMHC Premium, Total Loan, Units, First/Final Advance Dates). If Construction Insurance: insured, coverages and limits, expiry, lender as Certificate Holder/Additional Insured/First Loss Payee, flag if expiry within 60 days. Appendix reference. 80-150 words.`},
+  {id:'s2_2_16',nav:'2.2.16 New Home Registration',navSub:'NHW / rental use designation',icon:'◎',badge:'SECTION 2.2.16',title:'2.2.16  New Home Registration',desc:'Upload the New Home Warranty registration or approved rental use designation.',accepts:'.pdf,.jpg,.jpeg,.png,.docx',acceptsLabel:'PDF · JPG · PNG · DOCX',uploadTitle:'New Home Warranty or rental use designation',prompt:`Write Section 2.2.16 (New Home Registration): document type, provider/issuer, key details (certificate number, units covered). Appendix reference. 40-60 words.`},
+  {id:'s2_2_17',nav:'2.2.17 Property Tax',navSub:'Tax bill & proof of payment',icon:'◎',badge:'SECTION 2.2.17',title:'2.2.17  Property Tax',desc:'Upload the Property Tax Bill and/or proof of payment.',accepts:'.pdf,.jpg,.jpeg,.png,.docx',acceptsLabel:'PDF · JPG · PNG · DOCX',uploadTitle:'Property Tax Bill and proof of payment',prompt:`Write Section 2.2.17 (Property Tax): address, legal description, owner, assessment, annual tax + due date. If paid: confirm in full. If unpaid: flag outstanding, recommend Lender confirm prior to funding. Appendix reference. 60-100 words.`},
+  {id:'s2_2_18',nav:'2.2.18 Design Consultants',navSub:'Consultant agreements',icon:'◎',badge:'SECTION 2.2.18',title:'2.2.18  Design Consultants',desc:'Upload consultant engagement letters or agreements.',accepts:'.pdf,.xlsx,.xls,.docx',acceptsLabel:'PDF · XLSX · DOCX',uploadTitle:'Consultant agreements or engagement letters',prompt:`Write Section 2.2.18 (Design Consultants). For each: firm, discipline, engagement date, fee. Format: "We note that [Firm] has been engaged by the Borrower as [Discipline] under an agreement dated [date]. The design fee is $[X] plus GST." Appendix reference. 20-40 words per consultant.`},
+  {id:'s2_2_19',nav:'2.2.19 Appraisal',navSub:'As-completed valuation',icon:'◎',badge:'SECTION 2.2.19',title:'2.2.19  Appraisal',desc:'Upload the appraisal report or executive summary.',accepts:'.pdf,.docx',acceptsLabel:'PDF · DOCX',uploadTitle:'Appraisal report or executive summary',prompt:`Write Section 2.2.19 (Appraisal): firm, appraiser/designation (AACI), reference, report/effective date. List each valuation approach and result (Cost, Income Direct Cap with cap rate, Income GIM, Direct Comparison, Final As-Completed Value). If rental: monthly rates and NOI. Standard "provided directly to Lender" closing. Appendix reference. 120-180 words.`},
+  {id:'s2_2_20',nav:"2.2.20 Borrower's Equity",navSub:'Equity confirmation',icon:'◎',badge:'SECTION 2.2.20',title:"2.2.20  Borrower's Equity",desc:'Upload the equity confirmation document or mortgage statement.',accepts:'.pdf,.xlsx,.xls,.docx',acceptsLabel:'PDF · XLSX · DOCX',uploadTitle:'Equity confirmation or mortgage statement',prompt:`Write Section 2.2.20 (Borrower's Equity): equity requirement, equity composition (land equity via mortgage and land value, or cash equity), confirm equity within appraised value. If cash equity: injection timing. Appendix reference. 60-80 words.`},
   {id:'sother_group',type:'group',nav:'Other Sections',navSub:'Advance, progress & qualifications'},
-  {id:'s3',nav:'Section 3',navSub:'Sales / rental status',icon:'🏢',badge:'SECTION 3',title:'Section 3.0 — Unit Rental / Sales Status',desc:"Upload the current sales summary, rental agreements, or lease schedule.",accepts:'.pdf,.xlsx,.xls,.csv',acceptsLabel:'PDF · XLSX · CSV',uploadTitle:'Sales summary or rental agreements',prompt:`Write Section 3 (Unit Rental/Sales Status): lender presale/pre-lease requirements, current status (units sold/leased, contracted value, deposits), threshold met or not, units remaining. Sales documentation provided directly by Borrower to Lender. 100-180 words.`},
-  {id:'s4',nav:'Section 4',navSub:'Advance & important notes',icon:'💰',badge:'SECTION 4',title:'Section 4.0 — Calculation of Advance & Important Notes',desc:"Upload the Borrower's Request for Advance, Statutory Declaration, or accounts payable list.",accepts:'.pdf,.xlsx,.xls',acceptsLabel:'PDF · XLSX',uploadTitle:'Request for Advance or Stat Declaration',prompt:`Write Section 4 (Calculation of Advance and Important Notes). Structure: 4.1.1 Advance Recommendation; 4.1.2 Reconciliation to Borrower's Request; 4.2.1 Holdback (10%, AB Construction Lien Act); 4.2.2 Interest to date; 4.2.3 GST; 4.2.4 Budget changes; 4.2.5 Contingency % of cost to complete; 4.2.6 Funding sources; 4.2.7 Cashflow adequacy; 4.2.8 Statutory Declaration; 4.2.9 Compliance documentation; 4.2.10 Monitoring fees; standard CSG closing.`},
+  {id:'s3',nav:'Section 3',navSub:'Sales / rental status',icon:'🏢',badge:'SECTION 3',title:'Section 3.0 — Unit Rental / Sales Status',desc:"Upload the current sales summary, rental agreements, or lease schedule.",accepts:'.pdf,.xlsx,.xls,.csv,.docx',acceptsLabel:'PDF · XLSX · CSV · DOCX',uploadTitle:'Sales summary or rental agreements',prompt:`Write Section 3 (Unit Rental/Sales Status): lender presale/pre-lease requirements, current status (units sold/leased, contracted value, deposits), threshold met or not, units remaining. Sales documentation provided directly by Borrower to Lender. 100-180 words.`},
+  {id:'s4',nav:'Section 4',navSub:'Advance & important notes',icon:'💰',badge:'SECTION 4',title:'Section 4.0 — Calculation of Advance & Important Notes',desc:"Upload the Borrower's Request for Advance, Statutory Declaration, or accounts payable list.",accepts:'.pdf,.xlsx,.xls,.docx',acceptsLabel:'PDF · XLSX · DOCX',uploadTitle:'Request for Advance or Stat Declaration',prompt:`Write Section 4 (Calculation of Advance and Important Notes). Structure: 4.1.1 Advance Recommendation; 4.1.2 Reconciliation to Borrower's Request; 4.2.1 Holdback (10%, AB Construction Lien Act); 4.2.2 Interest to date; 4.2.3 GST; 4.2.4 Budget changes; 4.2.5 Contingency % of cost to complete; 4.2.6 Funding sources; 4.2.7 Cashflow adequacy; 4.2.8 Statutory Declaration; 4.2.9 Compliance documentation; 4.2.10 Monitoring fees; standard CSG closing.`},
   {id:'s5',nav:'Section 5',navSub:'Progress report',icon:'🔍',badge:'SECTION 5',title:'Section 5.0 — Progress Report & Construction Schedule',desc:'Upload site visit notes or photographs.',accepts:'.pdf,.txt,.jpg,.jpeg,.png',acceptsLabel:'PDF · TXT · JPG · PNG',uploadTitle:'Site visit notes or photographs',prompt:`Write Section 5. 5.1 Progress Report (site visit on [date]): structure by zone/floor/building with bold headings, concise bullet observations. 5.2 Construction Schedule: original completion date, current assessment, achievability, "We will monitor the progress and report accordingly." Factual, present tense.`},
   {id:'s6',nav:'Section 6',navSub:'Report qualifications',icon:'⚖',badge:'SECTION 6',title:'Section 6.0 — Report Qualifications',desc:'Standard CSG qualifications boilerplate — pre-populated and carried forward unchanged.',type:'static',staticText:`Commentary and calculations within this report are based on source documentation as requested by Cuthbert Smith Group Inc. for assembly of this report and as provided by the Borrower and/or Borrower's representatives. Cuthbert Smith Group Inc. have undertaken reasonable investigation and review of such documentation and have reported as appropriate upon any noted omissions, non-disclosure, errors or inaccuracies. Should any such omissions, non-disclosure, error or inaccuracy not previously noted become apparent, Cuthbert Smith Group Inc. cannot be held responsible for loss arising from omissions, non-disclosure, errors or inaccuracies not uncovered during such reasonable investigation and review.\n\nThis report has been prepared by Cuthbert Smith Group Inc. acting in the capacity of a cost consultant, and whilst Cuthbert Smith Group Inc. undertake to draw attention to any observed matters of project concern as may be reasonably expected in this capacity, commentary provided herein is generally limited to matters affecting project costs as can be reasonably expected to be reported upon by a cost consultant.`},
   {id:'s7',nav:'Section 7',navSub:'Photographs',icon:'📸',badge:'SECTION 7',title:'Section 7.0 — Photographs',desc:'Upload site visit photographs. AI will generate professional captions.',accepts:'.jpg,.jpeg,.png,.heic,.webp',acceptsLabel:'JPG · PNG · HEIC · WebP',uploadTitle:'Site visit photographs',prompt:`Write professional photo captions for Section 7. For each photo: concise caption (10-20 words) describing area/floor/building, work visible, construction stage. Format: "Photo 1: [description]." Factual, no speculation.`},
-  {id:'appendix',nav:'Appendices',navSub:'Supporting documents',icon:'📎',badge:'SECTION 8',title:'Section 8.0 — Appendices',desc:'Upload any remaining appendix documents. AI will generate the appendix index.',accepts:'.pdf,.xlsx,.xls,.docx',acceptsLabel:'PDF · XLSX · DOCX',uploadTitle:'Appendix documents',prompt:`List each uploaded document with its appendix letter (A through T as applicable) and one-line description in CSG standard labelling. Note any missing appendices with placeholder language.`}
+  {id:'appendix',nav:'Appendices',navSub:'Supporting documents',icon:'📎',badge:'SECTION 8',title:'Section 8.0 — Appendices',desc:'Upload appendix documents. The standard Preliminary Report appendix index is pre-populated below. AI will confirm which appendices have been provided and note any outstanding items.',accepts:'.pdf,.xlsx,.xls,.docx',acceptsLabel:'PDF · XLSX · DOCX',uploadTitle:'Appendix documents',type:'static',staticText:`Appendix 'A'  —  Site Plan, Building Plans & Elevations
+Appendix 'B'  —  Borrower's Project Budget
+Appendix 'C'  —  Project Budget Cost Analysis
+Appendix 'D1' —  Stipulated Price Construction Contract
+Appendix 'D2' —  Schedule of Trade Contractors
+Appendix 'E'  —  Construction Schedule
+Appendix 'F1' —  Residential Purchase Contract
+Appendix 'F2' —  Land Title Certificate
+Appendix 'G'  —  Site Survey
+Appendix 'H'  —  Geotechnical Investigation
+Appendix 'I'  —  Environmental Site Assessment
+Appendix 'J1' —  Development Permit
+Appendix 'J2' —  Development New Address Assignment
+Appendix 'J3' —  Development Off-Site Levy
+Appendix 'J4' —  Development Security Deposits
+Appendix 'K'  —  Building Permit
+Appendix 'L'  —  Certificate of Insurance
+Appendix 'M'  —  New Home Registration
+Appendix 'N'  —  Property Tax Notice
+Appendix 'O'  —  Design Consultant Documents
+Appendix 'P'  —  Appraisal (Executive Summary)
+Appendix 'Q'  —  Borrower's Request for Advance
+Appendix 'R'  —  Borrower's Statutory Declaration
+Appendix 'S'  —  Compliance Documents
+Appendix 'T'  —  Funding Conditions`},
+
+  // ── TOP-LEVEL SECTION GROUPINGS (shown in sidebar for Prelim Report) ──
+  {id:'sec1',nav:'Section 1.0',navSub:'Budget, cost summaries & cash flow',icon:'💰',badge:'SECTION 1.0',title:'Section 1.0 — Project Budget, Cost Summaries, Loan Calculation Check and Cash Flow',desc:'This section covers the full project budget review, construction cost summary, capital cost summary, loan calculation check, and anticipated cash flow. Upload documents and generate each subsection below.',type:'group_container',subsections:['s1_1','s1_2','s1_3','s1_4','s1_5','s1_6','s1_7','s1_8','s1_9']},
+  {id:'sec2',nav:'Section 2.0',navSub:'Funding conditions & documentation',icon:'📋',badge:'SECTION 2.0',title:'Section 2.0 — Funding Conditions and Documentation Review',desc:'This section covers all funding conditions and documentation review items. Upload documents and generate each subsection below.',type:'group_container',subsections:['s2_1','s2_2_1','s2_2_2','s2_2_3','s2_2_4','s2_2_5','s2_2_6','s2_2_7','s2_2_8','s2_2_9','s2_2_10','s2_2_11','s2_2_14','s2_2_15','s2_2_16','s2_2_17','s2_2_18','s2_2_19','s2_2_20']},
+  {id:'sec3',nav:'Section 3.0',navSub:'Unit rental status',icon:'🏢',badge:'SECTION 3.0',title:'Section 3.0 — Unit Rental Status',desc:'Upload the current sales summary, rental agreements, or lease schedule.',type:'group_container',subsections:['s3']},
+  {id:'sec4',nav:'Section 4.0',navSub:'Calculation of advance',icon:'💵',badge:'SECTION 4.0',title:'Section 4.0 — Calculation of Advance and Important Notes',desc:"Upload the Borrower's Request for Advance and Statutory Declaration.",type:'group_container',subsections:['s4']},
+  {id:'sec5',nav:'Section 5.0',navSub:'Progress report',icon:'🔍',badge:'SECTION 5.0',title:'Section 5.0 — Progress Report and Construction Schedule',desc:'Upload site visit notes or photographs.',type:'group_container',subsections:['s5']},
+  {id:'sec6',nav:'Section 6.0',navSub:'Report qualifications',icon:'⚖',badge:'SECTION 6.0',title:'Section 6.0 — Report Qualifications',desc:'Standard CSG qualifications boilerplate.',type:'group_container',subsections:['s6']},
+  {id:'sec7',nav:'Section 7.0',navSub:'Photographs',icon:'📸',badge:'SECTION 7.0',title:'Section 7.0 — Photographs',desc:'Upload site visit photographs.',type:'group_container',subsections:['s7']},
+  {id:'sec8',nav:'Section 8.0',navSub:'Appendices',icon:'📎',badge:'SECTION 8.0',title:'Section 8.0 — Appendices',desc:'Supporting documents index.',type:'group_container',subsections:['appendix']},
 ];
 
-// ── STATE ─────────────────────────────────────────────────────
+// ── SECTION LIBRARY CATEGORIES ────────────────────────────────
+const LIBRARY_CATEGORIES = [
+  {
+    id:'t1', icon:'📄', label:'Boilerplate',
+    desc:'Standard language saved once, auto-populates in every future report. No AI or document upload needed.',
+    color:'#EFF6FF', border:'#BFDBFE', text:'#1E40AF'
+  },
+  {
+    id:'t2', icon:'✨', label:'AI Assisted Boilerplate',
+    desc:'Boilerplate with blanks the AI fills from your completed report. Activate near the end of the report.',
+    color:'#FFF7ED', border:'#FED7AA', text:'#C06A0A'
+  },
+  {
+    id:'t3', icon:'💬', label:'AI Assisted Commentary',
+    desc:'Upload documents and AI writes professional commentary. Supports adding tables or images with placement control.',
+    color:'#F0FDF4', border:'#BBF7D0', text:'#166534'
+  },
+  {
+    id:'t4', icon:'📊', label:'AI Assisted Spreadsheet Analysis',
+    desc:'Upload a spreadsheet — AI extracts the key view, flags discrepancies, and generates minimal commentary.',
+    color:'#FAF5FF', border:'#E9D5FF', text:'#6B21A8'
+  },
+  {
+    id:'t5', icon:'📸', label:'AI Assisted Photo Organization',
+    desc:'Upload multiple photos — AI arranges them vertically with thumbnails and comment boxes for captions.',
+    color:'#FFF1F2', border:'#FECDD3', text:'#9F1239'
+  },
+  {
+    id:'t6', icon:'📎', label:'Appendices Organization',
+    desc:'AI lists all uploaded documents, you drag them into order, and AI auto-numbers and titles the appendices.',
+    color:'#F8FAFC', border:'#CBD5E1', text:'#334155'
+  },
+];
+
+// Default active sections per report type
+const REPORT_TYPE_TEMPLATES = {
+  'Preliminary Report':         ['setup','sec1','sec2','sec3','sec4','sec5','sec6','sec7','sec8'],
+  'Progress Report':            ['setup','sec1','sec3','sec4','sec5','sec6','sec7','sec8'],
+  'Budget Review Report':       ['setup','sec1','sec6','sec8'],
+  'Refinance Reissue':          ['setup','sec1','sec2','sec6','sec8'],
+  'Cost Control':               ['setup','sec1','sec5','sec6','sec8'],
+  'Cost Consultant Report':     ['setup','sec1','sec6','sec8'],
+  'Conceptual Design Estimate': ['setup','sec1','sec6','sec8'],
+  'Schematic Design Estimate':  ['setup','sec1','sec6','sec8'],
+  'Design Development Estimate':['setup','sec1','sec6','sec8'],
+  'Working Drawings Estimate':  ['setup','sec1','sec6','sec8'],
+  'Pre-Tender Estimate':        ['setup','sec1','sec6','sec8'],
+};
+
+const DEFAULT_ACTIVE_SECTIONS = REPORT_TYPE_TEMPLATES['Preliminary Report'];
 const STATE = {
   activeSection:'setup', currentProjectId:null,
-  project:{name:'',address:'',lender:'',lenderContact:'',borrower:'',reportType:'Progress Report',reportNumber:'',reportDate:new Date().toISOString().split('T')[0],siteVisitDate:'',loanAmount:'',interestRate:'',completionDate:'',csgRef:'',csgContact:''},
+  activeSections:[...DEFAULT_ACTIVE_SECTIONS],
+  dragSrcId:null,
+  dragFromLibrary:false,
+  project:{name:'',address:'',lender:'',lenderContact:'',borrower:'',reportType:'Progress Report',reportNumber:'',reportDate:new Date().toISOString().split('T')[0],siteVisitDate:'',loanAmount:'',interestRate:'',completionDate:'',csgRef:'',csgContact:'',assetClass:'',assetClassCustom:''},
   sections:{}
 };
 
 function initSections(){
   SECTIONS.forEach(s=>{
-    if(s.type==='group') return;
+    if(s.type==='group'||s.type==='group_container') return;
     STATE.sections[s.id]={files:[],text:s.type==='static'?s.staticText:'',status:s.type==='static'?'done':'empty',generating:false};
+  });
+  // Init top-level container sections
+  SECTIONS.filter(s=>s.type==='group_container').forEach(s=>{
+    STATE.sections[s.id]={files:[],text:'',status:'empty',generating:false};
   });
 }
 initSections();
@@ -331,7 +478,7 @@ async function doSave(){
   if(!STATE.currentProjectId) return;
   const p=STATE.project;
   try{
-    await db.from('projects').upsert({id:STATE.currentProjectId,name:p.name,address:p.address,csg_ref:p.csgRef,report_type:p.reportType,report_number:p.reportNumber,report_date:p.reportDate||null,site_visit_date:p.siteVisitDate||null,csg_contact:p.csgContact,anticipated_completion:p.completionDate||null,lender:p.lender,lender_contact:p.lenderContact,borrower:p.borrower,loan_amount:p.loanAmount,interest_rate:p.interestRate});
+    await db.from('projects').upsert({id:STATE.currentProjectId,name:p.name,address:p.address,csg_ref:p.csgRef,report_type:p.reportType,report_number:p.reportNumber,report_date:p.reportDate||null,site_visit_date:p.siteVisitDate||null,csg_contact:p.csgContact,anticipated_completion:p.completionDate||null,lender:p.lender,lender_contact:p.lenderContact,borrower:p.borrower,loan_amount:p.loanAmount,interest_rate:p.interestRate,active_sections:JSON.stringify(STATE.activeSections),asset_class:p.assetClass,asset_class_custom:p.assetClassCustom});
     const rows=Object.entries(STATE.sections).map(([sid,sec])=>({project_id:STATE.currentProjectId,section_id:sid,section_text:sec.text||'',status:sec.status||'empty'}));
     if(rows.length) await db.from('report_sections').upsert(rows,{onConflict:'project_id,section_id'});
     setSaveInd('saved');
@@ -344,7 +491,10 @@ async function loadProject(pid){
     const{data:proj,error:pe}=await db.from('projects').select('*').eq('id',pid).single();
     if(pe) throw pe;
     STATE.currentProjectId=pid;
-    STATE.project={name:proj.name||'',address:proj.address||'',csgRef:proj.csg_ref||'',reportType:proj.report_type||'Progress Report',reportNumber:proj.report_number||'',reportDate:proj.report_date||new Date().toISOString().split('T')[0],siteVisitDate:proj.site_visit_date||'',csgContact:proj.csg_contact||'',completionDate:proj.anticipated_completion||'',lender:proj.lender||'',lenderContact:proj.lender_contact||'',borrower:proj.borrower||'',loanAmount:proj.loan_amount||'',interestRate:proj.interest_rate||''};
+    STATE.project={name:proj.name||'',address:proj.address||'',csgRef:proj.csg_ref||'',reportType:proj.report_type||'Progress Report',reportNumber:proj.report_number||'',reportDate:proj.report_date||new Date().toISOString().split('T')[0],siteVisitDate:proj.site_visit_date||'',csgContact:proj.csg_contact||'',completionDate:proj.anticipated_completion||'',lender:proj.lender||'',lenderContact:proj.lender_contact||'',borrower:proj.borrower||'',loanAmount:proj.loan_amount||'',interestRate:proj.interest_rate||'',assetClass:proj.asset_class||'',assetClassCustom:proj.asset_class_custom||''};
+    // Restore active sections order if saved
+    if(proj.active_sections){try{STATE.activeSections=JSON.parse(proj.active_sections);}catch{STATE.activeSections=[...DEFAULT_ACTIVE_SECTIONS];}}
+    else{STATE.activeSections=[...DEFAULT_ACTIVE_SECTIONS];}
     initSections();
     const{data:secs}=await db.from('report_sections').select('*').eq('project_id',pid);
     (secs||[]).forEach(r=>{if(STATE.sections[r.section_id]){STATE.sections[r.section_id].text=r.section_text||STATE.sections[r.section_id].text;STATE.sections[r.section_id].status=r.status||STATE.sections[r.section_id].status;}});
@@ -356,7 +506,7 @@ async function loadProject(pid){
 async function createNewProject(){
   setLoading(true,'Creating project…');
   try{
-    const{data,error}=await db.from('projects').insert({name:'New Project',report_type:'Progress Report',report_date:new Date().toISOString().split('T')[0]}).select().single();
+    const{data,error}=await db.from('projects').insert({name:'New Project',report_type:'Preliminary Report',report_date:new Date().toISOString().split('T')[0],active_sections:JSON.stringify(REPORT_TYPE_TEMPLATES['Preliminary Report'])}).select().single();
     if(error) throw error;
     await loadProject(data.id);
   }catch(e){console.error(e);showToast('Error creating project: '+e.message);setLoading(false);}
@@ -402,8 +552,9 @@ function showEditorView(){
   const pv=document.getElementById('projects-view');
   const ev=document.getElementById('editor-view');
   pv.style.display='none'; ev.style.display='flex'; ev.style.flex='1'; ev.style.flexDirection='column'; ev.style.overflow='hidden';
-}
-function goToProjects(){loadProjectsList();}
+  const addBtn=document.getElementById('sb-add-btn');
+  if(addBtn) addBtn.style.display='flex';
+}function goToProjects(){loadProjectsList();}
 function setLoading(show,msg){
   const o=document.getElementById('loading-overlay');
   if(show){o.classList.remove('hidden');document.getElementById('loading-sub').textContent=msg||'Loading…';document.getElementById('app-shell').style.display='none';}
@@ -418,21 +569,216 @@ function updateSidebarProject(){
 // ── NAV ───────────────────────────────────────────────────────
 function renderNav(){
   const nav=document.getElementById('sb-nav');
-  nav.innerHTML=SECTIONS.map(s=>{
-    if(s.type==='group') return `<div class="sb-section-label" style="margin-top:10px">${s.nav}</div>`;
-    const sec=STATE.sections[s.id]; const isActive=STATE.activeSection===s.id;
-    const isSub=s.id.startsWith('s1_')||s.id.startsWith('s2_');
-    return `<button class="sb-nav-item ${isActive?'active':''}" onclick="switchSection('${s.id}')" style="${isSub?'padding-left:22px':''}">
-      <span class="nav-icon" style="${isSub?'font-size:8px;opacity:.6':''}">${s.icon}</span>
-      <span style="flex:1"><div class="nav-text" style="${isSub?'font-size:11px':''}">${s.nav}</div><div class="nav-sub">${s.navSub}</div></span>
-      <span class="nav-status ${sec?sec.status:'empty'}"></span>
+  const addBtn=document.getElementById('sb-add-btn');
+  if(addBtn) addBtn.style.display=STATE.currentProjectId?'flex':'none';
+  if(!STATE.currentProjectId){nav.innerHTML='';updateProgress();return;}
+
+  nav.innerHTML=STATE.activeSections.map(id=>{
+    const def=SECTIONS.find(s=>s.id===id);
+    if(!def||def.type==='group') return '';
+    const sec=STATE.sections[id];
+    const isActive=STATE.activeSection===id;
+    const isSub=id.startsWith('s1_')||id.startsWith('s2_');
+    const isSetup=id==='setup';
+    // For group_container, compute status from subsections
+    let statusClass=sec?sec.status:'empty';
+    if(def.type==='group_container'&&def.subsections){
+      const subs=def.subsections;
+      const allDone=subs.every(sid=>STATE.sections[sid]?.status==='done');
+      const anyDone=subs.some(sid=>STATE.sections[sid]?.status==='done'||STATE.sections[sid]?.status==='partial');
+      statusClass=allDone?'done':anyDone?'partial':'empty';
+    }
+    return `<button class="sb-nav-item ${isActive?'active':''}"
+      onclick="switchSection('${id}')"
+      style="${isSub?'padding-left:18px':''};position:relative"
+      draggable="${!isSetup}"
+      ondragstart="dragStart(event,'${id}',false)"
+      ondragover="dragOver(event,'${id}')"
+      ondragleave="dragLeave(event)"
+      ondrop="dragDrop(event,'${id}')"
+      ondragend="dragEnd()">
+      ${!isSetup?`<span class="drag-handle">⠿</span>`:'<span style="width:14px;flex-shrink:0"></span>'}
+      <span class="nav-icon" style="${isSub?'font-size:8px;opacity:.5':''}">${def.icon}</span>
+      <span style="flex:1;min-width:0;overflow:hidden">
+        <div class="nav-text" style="${isSub?'font-size:11px':''}; white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${def.nav}</div>
+        <div class="nav-sub">${def.navSub}</div>
+      </span>
+      <span class="nav-status ${statusClass}" style="flex-shrink:0"></span>
+      ${!isSetup?`<button class="section-remove" onclick="removeSection(event,'${id}')" title="Remove">✕</button>`:''}
     </button>`;
-  }).join('');
-  const completable=SECTIONS.filter(s=>s.type!=='form'&&s.type!=='group');
-  const done=completable.filter(s=>STATE.sections[s.id]?.status==='done').length;
-  const pct=Math.round((done/completable.length)*100);
+  }).join('') + `<div style="height:40px;min-height:40px" ondragover="event.preventDefault()" ondrop="dragDropOnNav(event)"></div>`;
+  updateProgress();
+}
+
+function updateProgress(){
+  const completable=STATE.activeSections.filter(id=>{const s=SECTIONS.find(x=>x.id===id);return s&&s.type!=='form'&&s.type!=='group';});
+  const done=completable.filter(id=>{
+    const s=SECTIONS.find(x=>x.id===id);
+    if(s?.type==='group_container'){
+      // Done when all subsections are done
+      return (s.subsections||[]).every(sid=>STATE.sections[sid]?.status==='done');
+    }
+    return STATE.sections[id]?.status==='done';
+  }).length;
+  const pct=completable.length?Math.round((done/completable.length)*100):0;
   document.getElementById('progress-bar').style.width=pct+'%';
   document.getElementById('progress-pct').textContent=pct+'%';
+}
+
+// ── DRAG & DROP ───────────────────────────────────────────────
+function dragStart(e,id,fromLibrary){
+  STATE.dragSrcId=id;
+  STATE.dragFromLibrary=fromLibrary||false;
+  e.dataTransfer.effectAllowed='move';
+  e.dataTransfer.setData('text/plain',id);
+  if(!fromLibrary) e.currentTarget.style.opacity='.4';
+}
+function dragOver(e,id){
+  e.preventDefault();
+  e.dataTransfer.dropEffect='move';
+  if(id==='setup') return;
+  e.currentTarget.classList.add('drag-over-bottom');
+}
+function dragLeave(e){
+  e.currentTarget.classList.remove('drag-over-top','drag-over-bottom');
+}
+function dragDrop(e,id){
+  e.preventDefault();
+  e.currentTarget.classList.remove('drag-over-top','drag-over-bottom');
+  const srcId=STATE.dragSrcId;
+  if(!srcId||srcId===id||id==='setup') return;
+  const arr=STATE.activeSections;
+  if(STATE.dragFromLibrary){
+    // Dragging from library into sidebar — insert at drop position
+    if(arr.includes(srcId)) return; // already added
+    const toIdx=arr.indexOf(id);
+    arr.splice(toIdx>-1?toIdx:arr.length,0,srcId);
+  } else {
+    // Reordering within sidebar
+    const fromIdx=arr.indexOf(srcId);
+    const toIdx=arr.indexOf(id);
+    if(fromIdx<0||toIdx<0) return;
+    arr.splice(fromIdx,1);
+    arr.splice(toIdx,0,srcId);
+  }
+  renderNav();
+  renderLibrary();
+  scheduleSave();
+  if(STATE.dragFromLibrary) showToast('Section added');
+}
+function dragDropOnNav(e){
+  // Drop anywhere on the nav (bottom of list)
+  e.preventDefault();
+  const srcId=STATE.dragSrcId;
+  if(!srcId||!STATE.dragFromLibrary) return;
+  if(STATE.activeSections.includes(srcId)) return;
+  STATE.activeSections.push(srcId);
+  renderNav();
+  renderLibrary();
+  scheduleSave();
+  showToast('Section added');
+}
+function dragEnd(){
+  STATE.dragSrcId=null;
+  STATE.dragFromLibrary=false;
+  document.querySelectorAll('.sb-nav-item').forEach(el=>{
+    el.style.opacity='1';
+    el.classList.remove('drag-over-top','drag-over-bottom');
+  });
+}
+
+// ── SECTION ADD / REMOVE ──────────────────────────────────────
+function addSection(id){
+  if(STATE.activeSections.includes(id)) return;
+  const insertBefore=['s6','appendix'];
+  let insertIdx=STATE.activeSections.length;
+  for(const anchor of insertBefore){const i=STATE.activeSections.indexOf(anchor);if(i>-1){insertIdx=i;break;}}
+  STATE.activeSections.splice(insertIdx,0,id);
+  renderNav();
+  renderLibrary();
+  scheduleSave();
+  showToast('Section added');
+}
+function removeSection(e,id){
+  e.stopPropagation();
+  if(id==='setup') return;
+  STATE.activeSections=STATE.activeSections.filter(x=>x!==id);
+  if(STATE.activeSection===id){
+    switchSection(STATE.activeSections.find(x=>x!=='setup')||'setup');
+  } else { renderNav(); }
+  scheduleSave();
+  showToast('Section removed');
+}
+
+// ── LIBRARY ───────────────────────────────────────────────────
+function openLibrary(){
+  renderLibrary();
+  document.getElementById('library-drawer').style.width='260px';
+}
+function closeLibrary(){
+  document.getElementById('library-drawer').style.width='0';
+}
+function renderLibrary(){
+  const body=document.getElementById('library-body');
+  body.innerHTML=`
+    <div style="font-size:10px;color:var(--gray);padding:4px 8px 12px;line-height:1.5">
+      Choose a template type to add a new section to your report
+    </div>` +
+  LIBRARY_CATEGORIES.map(cat=>{
+    return `<div
+      onclick="promptAddSection('${cat.id}')"
+      style="display:flex;align-items:flex-start;gap:10px;padding:10px 12px;border-radius:8px;
+        cursor:pointer;margin-bottom:6px;
+        background:transparent;border:1px solid transparent;
+        transition:all .15s;user-select:none"
+      onmouseover="this.style.background='var(--dark3)';this.style.borderColor='rgba(232,135,30,.3)'"
+      onmouseout="this.style.background='transparent';this.style.borderColor='transparent'">
+      <span style="font-size:20px;flex-shrink:0;margin-top:1px">${cat.icon}</span>
+      <span style="flex:1;min-width:0">
+        <div style="font-size:12px;font-weight:600;color:white;line-height:1.3;margin-bottom:3px">${cat.label}</div>
+        <div style="font-size:10px;color:var(--gray);line-height:1.4">${cat.desc}</div>
+      </span>
+      <span style="font-size:14px;font-weight:700;flex-shrink:0;color:var(--orange);margin-top:2px">+</span>
+    </div>`;
+  }).join('');
+}
+
+function promptAddSection(templateId){
+  const cat=LIBRARY_CATEGORIES.find(c=>c.id===templateId);
+  if(!cat) return;
+  const name=prompt(`Name this ${cat.label} section:\n(e.g. "1.2 Description of Project")`,cat.label);
+  if(!name||!name.trim()) return;
+  // Create a new dynamic section
+  const newId='custom_'+Date.now();
+  const newSection={
+    id:newId,
+    nav:name.trim(),
+    navSub:cat.label,
+    icon:cat.icon,
+    badge:name.trim().toUpperCase(),
+    title:name.trim(),
+    desc:`${cat.label} section`,
+    templateType:templateId,
+    accepts:'.pdf,.docx,.xlsx,.jpg,.jpeg,.png',
+    acceptsLabel:'PDF · DOCX · XLSX · IMG',
+    uploadTitle:'Upload documents for this section',
+    prompt:`You are a professional Quantity Surveyor at CSG. Write the section "${name.trim()}" based on the uploaded documents and project context. Follow CSG standard formatting, professional third-person style.`
+  };
+  // Add to SECTIONS array dynamically
+  SECTIONS.push(newSection);
+  // Init state for this section
+  STATE.sections[newId]={files:[],text:'',status:'empty',generating:false};
+  // Add to active sections
+  const insertBefore=['sec6','sec7','sec8'];
+  let insertIdx=STATE.activeSections.length;
+  for(const anchor of insertBefore){const i=STATE.activeSections.indexOf(anchor);if(i>-1){insertIdx=i;break;}}
+  STATE.activeSections.splice(insertIdx,0,newId);
+  renderNav();
+  renderLibrary();
+  closeLibrary();
+  switchSection(newId);
+  scheduleSave();
+  showToast(`"${name.trim()}" added`);
 }
 
 function switchSection(id){
@@ -442,25 +788,79 @@ function switchSection(id){
   document.getElementById('topbar-title').textContent=def.title;
   document.getElementById('topbar-sub').textContent=def.desc.substring(0,90)+(def.desc.length>90?'…':'');
 }
-
 // ── CONTENT ───────────────────────────────────────────────────
 function renderContent(){
   const id=STATE.activeSection; const def=SECTIONS.find(s=>s.id===id); const sec=STATE.sections[id];
   const content=document.getElementById('content');
+  if(!def){content.innerHTML='';return;}
   if(def.type==='form'){content.innerHTML=renderSetupForm();return;}
   if(def.type==='static'){content.innerHTML=renderStaticSection(def,sec);return;}
+  if(def.type==='group_container'){content.innerHTML=renderGroupContainer(def);return;}
   content.innerHTML=renderUploadSection(def,sec); updateCharCount(id);
+}
+
+function renderGroupContainer(def){
+  const subsections=def.subsections||[];
+  const subsectionHTML=subsections.map(sid=>{
+    const subDef=SECTIONS.find(s=>s.id===sid);
+    if(!subDef) return '';
+    const subSec=STATE.sections[sid];
+    const hasText=subSec?.text?.trim().length>0;
+    const statusColor=subSec?.status==='done'?'var(--green)':subSec?.status==='partial'?'var(--orange)':'var(--border)';
+    return `<div style="border:1px solid var(--border);border-radius:8px;overflow:hidden;margin-bottom:12px">
+      <div style="display:flex;align-items:center;gap:10px;padding:12px 16px;background:var(--bg);cursor:pointer;transition:background .15s"
+        onclick="switchSection('${sid}')"
+        onmouseover="this.style.background='var(--orange-light)'"
+        onmouseout="this.style.background='var(--bg)'">
+        <span style="font-size:13px">${subDef.icon}</span>
+        <span style="flex:1">
+          <div style="font-size:13px;font-weight:600;color:var(--text)">${subDef.title}</div>
+          <div style="font-size:11px;color:var(--text3);margin-top:2px">${subDef.navSub}</div>
+        </span>
+        <span style="display:flex;align-items:center;gap:8px">
+          ${hasText?`<span style="font-size:10px;font-weight:600;color:var(--green);background:#DCFCE7;padding:2px 8px;border-radius:4px">✓ Done</span>`:''}
+          <span style="width:8px;height:8px;border-radius:50%;background:${statusColor};flex-shrink:0"></span>
+          <span style="font-size:11px;color:var(--text3)">→</span>
+        </span>
+      </div>
+    </div>`;
+  }).join('');
+  return `<div class="section-header">
+    <div class="section-badge">${def.icon} ${def.badge}</div>
+    <h1>${def.title}</h1>
+    <p>${def.desc}</p>
+  </div>
+  <div style="margin-top:4px">${subsectionHTML}</div>
+  <div style="margin-top:8px;padding:12px;background:var(--orange-light);border-radius:8px;font-size:12px;color:var(--orange-dark)">
+    Click any subsection above to upload documents and generate report text. Use the back arrow in your browser or click the section in the sidebar to return here.
+  </div>`;
 }
 
 function renderSetupForm(){
   const p=STATE.project;
+  const reportTypes=['Preliminary Report','Budget Review Report','Refinance Reissue','Cost Control','Progress Report','Cost Consultant Report','Conceptual Design Estimate','Schematic Design Estimate','Design Development Estimate','Working Drawings Estimate','Pre-Tender Estimate'];
+  const assetClasses=['Single Family','Duplex','4-Plex','8-Plex','12-Plex','16-Plex','Multifamily','Condo','Apartment','Affordable Housing','Highrise Residential','Multiphase Townhome','Residential Conversion','Seniors/Assisted Living','Warehouse','Commercial Centre','Office Development','Healthcare','School','Prison','Institutional','Land Servicing','Custom'];
   return `<div class="section-header"><div class="section-badge">⚙ SETUP</div><h1>Project Setup</h1><p>Project details entered here populate the cover letter, section headers, and key data fields throughout the report. Complete this before generating any section text.</p></div>
   <div class="stack">
     <div class="card"><div class="card-header"><div class="card-title">📁 Project Identity</div></div><div class="card-body"><div class="form-grid">
       <div class="form-group full"><label class="form-label">Project name</label><input class="form-input" type="text" placeholder="e.g. Cornerstone Stop — Building A & B" value="${esc(p.name)}" oninput="setProj('name',this.value)"></div>
       <div class="form-group full"><label class="form-label">Property address</label><input class="form-input" type="text" placeholder="e.g. 110 Corner Meadows Manor NE, Calgary, AB" value="${esc(p.address)}" oninput="setProj('address',this.value)"></div>
       <div class="form-group"><label class="form-label">CSG project reference</label><input class="form-input" type="text" placeholder="e.g. C25074" value="${esc(p.csgRef)}" oninput="setProj('csgRef',this.value)"></div>
-      <div class="form-group"><label class="form-label">Report type</label><select class="form-select" onchange="setProj('reportType',this.value)"><option ${p.reportType==='Preliminary Report'?'selected':''}>Preliminary Report</option><option ${p.reportType==='Progress Report'?'selected':''}>Progress Report</option></select></div>
+      <div class="form-group"><label class="form-label">Report type</label>
+        <select class="form-select" onchange="setProj('reportType',this.value)">
+          ${reportTypes.map(t=>`<option ${p.reportType===t?'selected':''}>${t}</option>`).join('')}
+        </select>
+      </div>
+      <div class="form-group"><label class="form-label">Asset class</label>
+        <select class="form-select" onchange="setProj('assetClass',this.value);document.getElementById('asset-custom-wrap').style.display=this.value==='Custom'?'block':'none'">
+          <option value="">— Select asset class —</option>
+          ${assetClasses.map(a=>`<option ${p.assetClass===a?'selected':''}>${a}</option>`).join('')}
+        </select>
+      </div>
+      <div class="form-group" id="asset-custom-wrap" style="display:${p.assetClass==='Custom'?'block':'none'}">
+        <label class="form-label">Custom asset class</label>
+        <input class="form-input" type="text" placeholder="Enter custom asset class" value="${esc(p.assetClassCustom)}" oninput="setProj('assetClassCustom',this.value)">
+      </div>
       <div class="form-group"><label class="form-label">Report number</label><input class="form-input" type="text" placeholder="e.g. #7" value="${esc(p.reportNumber)}" oninput="setProj('reportNumber',this.value)"></div>
       <div class="form-group"><label class="form-label">Report date</label><input class="form-input" type="date" value="${esc(p.reportDate)}" oninput="setProj('reportDate',this.value)"></div>
       <div class="form-group"><label class="form-label">Site visit date</label><input class="form-input" type="date" value="${esc(p.siteVisitDate)}" oninput="setProj('siteVisitDate',this.value)"></div>
@@ -478,7 +878,9 @@ function renderSetupForm(){
         <div class="form-group full"><label class="form-label">Anticipated completion</label><input class="form-input" type="date" value="${esc(p.completionDate)}" oninput="setProj('completionDate',this.value)"></div>
       </div></div></div>
     </div>
-    <div style="display:flex;justify-content:flex-end;padding-bottom:8px"><button class="btn btn-primary" onclick="switchSection('s1_1')">Save & continue to Section 1 →</button></div>
+    <div style="display:flex;justify-content:flex-end;padding-bottom:8px">
+      <button class="btn btn-primary" onclick="switchSection('s1_1')">Save & continue to Section 1 →</button>
+    </div>
   </div>`;
 }
 
@@ -486,6 +888,14 @@ function setProj(key,val){
   STATE.project[key]=val;
   if(key==='name') document.getElementById('sb-project-name').textContent=val||'New Project';
   if(key==='reportType'||key==='reportNumber') document.getElementById('sb-project-sub').textContent=STATE.project.reportType+(STATE.project.reportNumber?' '+STATE.project.reportNumber:'');
+  if(key==='reportType'){
+    const template=REPORT_TYPE_TEMPLATES[val];
+    if(template && confirm(`Load the standard "${val}" section template? This will replace your current sidebar sections.`)){
+      STATE.activeSections=[...template];
+      renderNav();
+      showToast(`Loaded ${val} template`);
+    }
+  }
   scheduleSave();
 }
 
@@ -500,6 +910,11 @@ function renderUploadSection(def,sec){
   const hasFiles=sec.files.length>0; const hasText=sec.text.length>0; const isGen=sec.generating;
   const fileListHTML=hasFiles?`<div class="file-list">${sec.files.map((f,i)=>`<div class="file-item"><span class="file-icon">${getFileIcon(f.name)}</span><div class="file-info"><div class="file-name">${esc(f.name)}</div><div class="file-size">${formatSize(f.size)}</div></div><span class="file-status">Ready</span><button class="file-remove" onclick="removeFile('${def.id}',${i})">✕</button></div>`).join('')}</div>`:'';;
   const aiStatusHTML=isGen?`<div class="ai-status"><div class="spinner"></div><span>AI is analysing your document…</span></div>`:hasText?`<div class="ai-status"><span style="color:var(--green)">✓</span><span style="color:var(--green)">Section text generated. Review and edit below.</span></div>`:`<div class="ai-status"><span>${hasFiles?'Document ready — click Generate.':'Upload a document, then click Generate.'}</span></div>`;
+  const genButtons=isGen
+    ?`<button class="btn btn-ai" disabled><span class="spinner" style="width:12px;height:12px;border-width:1.5px"></span> Generating…</button>`
+    :hasText
+      ?`<button class="btn btn-ai" onclick="generateSection('${def.id}')">↺ Regenerate</button>`
+      :`<button class="btn btn-ai" onclick="generateSection('${def.id}')">✦ Generate with AI</button>`;
   return `<div class="section-header"><div class="section-badge">${def.icon} ${def.badge}</div><h1>${def.title}</h1><p>${def.desc}</p></div>
   <div class="card" style="margin-bottom:16px"><div class="card-header"><div class="card-title">📎 Document Upload</div><span class="info-chip">${def.acceptsLabel}</span></div>
   <div class="card-body"><div class="upload-zone" id="drop-${def.id}" ondragover="handleDragOver(event,'${def.id}')" ondragleave="handleDragLeave(event,'${def.id}')" ondrop="handleDrop(event,'${def.id}')">
@@ -508,7 +923,7 @@ function renderUploadSection(def,sec){
     <div class="upload-sub">Drag & drop or click to browse</div><div class="upload-accepts">${def.accepts}</div>
   </div>${fileListHTML}</div></div>
   <div class="card" style="margin-bottom:16px"><div class="card-header"><div class="card-title"><span class="ai-badge">✦ AI</span> Generate section text</div></div>
-  <div class="card-body"><div class="ai-action-bar">${aiStatusHTML}<button class="btn btn-ai" onclick="generateSection('${def.id}')" ${isGen?'disabled':''}>${isGen?'<span class="spinner" style="width:12px;height:12px;border-width:1.5px"></span> Generating…':'✦ Generate with AI'}</button></div>
+  <div class="card-body"><div class="ai-action-bar">${aiStatusHTML}${genButtons}</div>
   <div style="font-size:11px;color:var(--text3);margin-top:4px">AI will analyse your uploaded document and generate professionally-worded report text in CSG's standard style.</div></div></div>
   <div class="card"><div class="card-header"><div class="card-title">Report text — ${def.nav} ${hasText?'<span class="info-chip" style="background:#DCFCE7;color:var(--green)">✓ Generated</span>':''}</div>
   <div style="display:flex;gap:6px">${hasText?`<button class="btn btn-sm btn-secondary" onclick="copyText('${def.id}')">Copy</button>`:''}<button class="btn btn-sm btn-ghost" onclick="markDone('${def.id}')" ${!hasText?'disabled':''}>Mark done</button></div></div>
@@ -523,7 +938,7 @@ function handleDrop(e,id){e.preventDefault();document.getElementById(`drop-${id}
 function handleFileSelect(e,id){addFiles(id,Array.from(e.target.files));}
 function addFiles(id,files){files.forEach(f=>STATE.sections[id].files.push(f));if(STATE.sections[id].status==='empty')STATE.sections[id].status='partial';renderContent();}
 function removeFile(id,idx){STATE.sections[id].files.splice(idx,1);if(!STATE.sections[id].files.length&&STATE.sections[id].status==='partial')STATE.sections[id].status='empty';renderContent();}
-function getFileIcon(n){const icons={pdf:'📄',xlsx:'📊',xls:'📊',csv:'📊',docx:'📝',txt:'📃',jpg:'🖼',jpeg:'🖼',png:'🖼',heic:'🖼',webp:'🖼'};return icons[n.split('.').pop().toLowerCase()]||'📁';}
+function getFileIcon(n){const icons={pdf:'📄',xlsx:'📊',xls:'📊',csv:'📊',docx:'📝',doc:'📝',txt:'📃',jpg:'🖼',jpeg:'🖼',png:'🖼',heic:'🖼',webp:'🖼'};return icons[n.split('.').pop().toLowerCase()]||'📁';}
 function formatSize(b){return b<1024?b+' B':b<1048576?(b/1024).toFixed(1)+' KB':(b/1048576).toFixed(1)+' MB';}
 
 async function extractFileContent(file){
@@ -542,6 +957,14 @@ async function extractFileContent(file){
     catch{return{type:'text',data:`[Excel: ${file.name} — unable to parse]`};}
   }
   if(['csv','txt'].includes(ext)) return new Promise(r=>{const fr=new FileReader();fr.onload=e=>r({type:'text',data:`[${ext.toUpperCase()}: ${file.name}]\n\n${e.target.result.substring(0,8000)}`});fr.readAsText(file);});
+  // Word docs → extract text via mammoth
+  if(['docx','doc'].includes(ext)&&typeof mammoth!=='undefined'){
+    try{
+      const ab=await file.arrayBuffer();
+      const result=await mammoth.extractRawText({arrayBuffer:ab});
+      return{type:'text',data:`[Word Document: ${file.name}]\n\n${result.value.substring(0,8000)}`};
+    }catch(e){return{type:'text',data:`[Word Document: ${file.name} — unable to extract text]`};}
+  }
   return{type:'text',data:`[File: ${file.name}, ${formatSize(file.size)}]`};
 }
 
@@ -563,7 +986,7 @@ async function generateSection(id){
     }else{blocks.push({type:'text',text:'[No document uploaded — generate from project context and section requirements. Use [brackets] where specific figures are needed.]'});}
     blocks.push({type:'text',text:'\n\n---\n\nBased on the above, please generate the report section text as instructed.'});
     const sys=`You are a senior Quantity Surveyor at Cuthbert Smith Group Inc. (CSG), a professional quantity surveying and construction cost management firm in Alberta, Canada. You specialize in mortgage monitoring reports for institutional construction lenders.\n\nCSG writing style:\n- Professional, formal, third-person\n- Concise and factual — no unnecessary padding\n- Standard Canadian construction industry terminology\n- Specific figures stated precisely; uncertainties flagged with [brackets]\n- Reports addressed to the lender; borrower mentioned in third person\n- Standard phrases: "We have reviewed...", "We confirm...", "We have calculated..."`;
-    const res=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:1000,system:sys+'\n\n'+def.prompt,messages:[{role:'user',content:blocks}]})});
+    const res=await fetch('/.netlify/functions/claude',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:4000,system:sys+'\n\n'+def.prompt,messages:[{role:'user',content:blocks}]})});
     if(!res.ok){const err=await res.json().catch(()=>({}));throw new Error(err.error?.message||`API error ${res.status}`);}
     const data=await res.json();
     sec.text=data.content.filter(b=>b.type==='text').map(b=>b.text).join('');
@@ -582,13 +1005,84 @@ function markDone(id){if(!STATE.sections[id])return;STATE.sections[id].status=ST
 function clearSection(){const id=STATE.activeSection;if(id==='setup'||!STATE.sections[id])return;const def=SECTIONS.find(s=>s.id===id);if(def?.type==='static')return;STATE.sections[id].text='';STATE.sections[id].files=[];STATE.sections[id].status='empty';renderContent();renderNav();scheduleSave();}
 
 // ── COMPILE ───────────────────────────────────────────────────
+const PRELIM_TOC = [
+  {type:'section', num:'Section 1.0', title:'Project Budget, Cost Summaries, Loan Calculation Check and Cash Flow'},
+  {type:'section', num:'Section 2.0', title:'Funding Conditions and Documentation Review'},
+  {type:'section', num:'Section 3.0', title:'Unit Rental Status'},
+  {type:'section', num:'Section 4.0', title:'Calculation of Advance and Important Notes'},
+  {type:'section', num:'Section 5.0', title:'Progress Report and Construction Schedule'},
+  {type:'section', num:'Section 6.0', title:'Report Qualifications'},
+  {type:'section', num:'Section 7.0', title:'Photographs'},
+  {type:'section', num:'Section 8.0', title:'Appendices', bold:true},
+  {type:'appendix', num:"Appendix 'A'",   title:'Site Plan, Building Plans & Elevations'},
+  {type:'appendix', num:"Appendix 'B'",   title:"Borrower's Project Budget"},
+  {type:'appendix', num:"Appendix 'C'",   title:'Project Budget Cost Analysis'},
+  {type:'appendix', num:"Appendix 'D1'",  title:'Stipulated Price Construction Contract'},
+  {type:'appendix', num:"Appendix 'D2'",  title:'Schedule of Trade Contractors'},
+  {type:'appendix', num:"Appendix 'E'",   title:'Construction Schedule'},
+  {type:'appendix', num:"Appendix 'F1'",  title:'Residential Purchase Contract'},
+  {type:'appendix', num:"Appendix 'F2'",  title:'Land Title Certificate'},
+  {type:'appendix', num:"Appendix 'G'",   title:'Site Survey'},
+  {type:'appendix', num:"Appendix 'H'",   title:'Geotechnical Investigation'},
+  {type:'appendix', num:"Appendix 'I'",   title:'Environmental Site Assessment'},
+  {type:'appendix', num:"Appendix 'J1'",  title:'Development Permit'},
+  {type:'appendix', num:"Appendix 'J2'",  title:'Development New Address Assignment'},
+  {type:'appendix', num:"Appendix 'J3'",  title:'Development Off-Site Levy'},
+  {type:'appendix', num:"Appendix 'J4'",  title:'Development Security Deposits'},
+  {type:'appendix', num:"Appendix 'K'",   title:'Building Permit'},
+  {type:'appendix', num:"Appendix 'L'",   title:'Certificate of Insurance'},
+  {type:'appendix', num:"Appendix 'M'",   title:'New Home Registration'},
+  {type:'appendix', num:"Appendix 'N'",   title:'Property Tax Notice'},
+  {type:'appendix', num:"Appendix 'O'",   title:'Design Consultant Documents'},
+  {type:'appendix', num:"Appendix 'P'",   title:'Appraisal (Executive Summary)'},
+  {type:'appendix', num:"Appendix 'Q'",   title:"Borrower's Request for Advance"},
+  {type:'appendix', num:"Appendix 'R'",   title:"Borrower's Statutory Declaration"},
+  {type:'appendix', num:"Appendix 'S'",   title:'Compliance Documents'},
+  {type:'appendix', num:"Appendix 'T'",   title:'Funding Conditions'},
+];
+
+function buildTOC(reportType){
+  if(reportType !== 'Preliminary Report') return '';
+  const rows = PRELIM_TOC.map(row => {
+    if(row.type === 'section'){
+      return `<tr>
+        <td style="padding:2px 16px 2px 0;font-size:12px;font-weight:${row.bold?'700':'400'};white-space:nowrap;vertical-align:top">${row.bold?`<strong>${row.num}</strong>`:row.num}</td>
+        <td style="padding:2px 0;font-size:12px;font-weight:${row.bold?'700':'400'}">${row.bold?`<strong>${row.title}</strong>`:row.title}</td>
+      </tr>`;
+    } else {
+      return `<tr>
+        <td style="padding:1px 16px 1px 24px;font-size:12px;font-weight:700;white-space:nowrap;vertical-align:top"><strong>${row.num}</strong></td>
+        <td style="padding:1px 8px;font-size:12px;font-weight:700;white-space:nowrap;vertical-align:top"><strong>—</strong></td>
+        <td style="padding:1px 0;font-size:12px;font-weight:700"><strong>${row.title}</strong></td>
+      </tr>`;
+    }
+  }).join('');
+  return `<div class="report-section" style="page-break-after:always">
+    <div style="font-size:14px;font-weight:700;margin-bottom:14px;color:var(--text)">Contents:</div>
+    <table style="border-collapse:collapse;width:100%">
+      <tbody>${rows}</tbody>
+    </table>
+  </div>`;
+}
+
 function openCompile(){
   const p=STATE.project;
   const rt=`${p.reportType}${p.reportNumber?' '+p.reportNumber:''}`;
   document.getElementById('modal-report-type').textContent=rt+' — '+(p.name||'Draft')+' — '+(p.reportDate||'No date');
   const rd=p.reportDate?new Date(p.reportDate).toLocaleDateString('en-CA',{year:'numeric',month:'long',day:'numeric'}):'[Date]';
-  const sectionHTML=SECTIONS.filter(s=>s.id!=='setup'&&s.type!=='group'&&s.type!=='form').map(s=>{
-    const sec=STATE.sections[s.id]; const hasText=sec?.text?.trim().length>0;
+  const tocHTML = buildTOC(p.reportType);
+  const sectionHTML=STATE.activeSections.filter(id=>{const s=SECTIONS.find(x=>x.id===id);return s&&s.id!=='setup'&&s.type!=='group'&&s.type!=='form';}).map(id=>{
+    const s=SECTIONS.find(x=>x.id===id);
+    if(s.type==='group_container'){
+      // Expand all subsections inline
+      return (s.subsections||[]).map(sid=>{
+        const sub=SECTIONS.find(x=>x.id===sid);
+        if(!sub) return '';
+        const sec=STATE.sections[sid]; const hasText=sec?.text?.trim().length>0;
+        return `<div class="report-section"><div class="report-section-header"><span class="report-section-num">${sub.badge}</span><span class="report-section-title">${sub.title}</span></div><div class="report-section-content">${hasText?escapeHtml(sec.text):'<span class="report-section-empty">No text generated for this section yet.</span>'}</div></div>`;
+      }).join('');
+    }
+    const sec=STATE.sections[id]; const hasText=sec?.text?.trim().length>0;
     return `<div class="report-section"><div class="report-section-header"><span class="report-section-num">${s.badge}</span><span class="report-section-title">${s.title}</span></div><div class="report-section-content">${hasText?escapeHtml(sec.text):'<span class="report-section-empty">No text generated for this section yet.</span>'}</div></div>`;
   }).join('');
   document.getElementById('modal-body').innerHTML=`<div class="report-doc" id="compiled-report">
@@ -606,6 +1100,7 @@ function openCompile(){
       <div style="font-size:12px;color:var(--text3)">${esc(p.address||'[Project Address]')}</div>
       <div style="font-size:11px;margin-top:10px;padding:8px 14px;background:var(--orange-light);border-radius:6px;color:var(--orange-dark)">We are pleased to present our ${esc(rt)} for the above noted project. This report has been prepared for the exclusive use of the project lender, ${esc(p.lender||'[Lender Name]')}. Borrower: ${esc(p.borrower||'[Borrower Name]')}.</div>
     </div>
+    ${tocHTML}
     ${sectionHTML}
     <div class="report-section" style="border-bottom:none;margin-bottom:0">
       <div style="font-size:12px;color:var(--text2)">Yours truly,</div>
@@ -620,7 +1115,7 @@ function copyReport(){const el=document.getElementById('compiled-report');if(el)
 function printReport(){
   const el=document.getElementById('compiled-report');if(!el)return;
   const w=window.open('','_blank');
-  w.document.write(`<!DOCTYPE html><html><head><title>CSG Report</title><style>body{font-family:'DM Sans',system-ui,sans-serif;max-width:700px;margin:40px auto;color:#1a1a17;line-height:1.6;font-size:13px}.report-section{margin-bottom:28px;padding-bottom:28px;border-bottom:1px solid #eee}.report-section-header{display:flex;align-items:baseline;gap:12px;margin-bottom:10px}.report-section-num{background:#FAE8D0;color:#C06A0A;padding:2px 8px;border-radius:4px;font-size:10px;font-weight:700;letter-spacing:.05em}.report-section-title{font-size:16px;font-weight:500}.report-section-content{font-size:13px;color:#5A5955;line-height:1.7;white-space:pre-wrap}.report-section-empty{font-style:italic;color:#888}</style></head><body>${el.innerHTML}</body></html>`);
+  w.document.write(`<!DOCTYPE html><html><head><title>CSG Report</title><style>body{font-family:'DM Sans',system-ui,sans-serif;max-width:700px;margin:40px auto;color:#1a1a17;line-height:1.6;font-size:13px}.report-section{margin-bottom:28px;padding-bottom:28px;border-bottom:1px solid #eee}.report-section-header{display:flex;align-items:baseline;gap:12px;margin-bottom:10px}.report-section-num{background:#FAE8D0;color:#C06A0A;padding:2px 8px;border-radius:4px;font-size:10px;font-weight:700;letter-spacing:.05em}.report-section-title{font-size:16px;font-weight:500}.report-section-content{font-size:13px;color:#5A5955;line-height:1.7;white-space:pre-wrap}.report-section-empty{font-style:italic;color:#888}table{border-collapse:collapse;width:100%}td{vertical-align:top}</style></head><body>${el.innerHTML}</body></html>`);
   w.document.close();w.print();
 }
 
