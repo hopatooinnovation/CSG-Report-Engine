@@ -563,7 +563,7 @@ async function generateSection(id){
     }else{blocks.push({type:'text',text:'[No document uploaded — generate from project context and section requirements. Use [brackets] where specific figures are needed.]'});}
     blocks.push({type:'text',text:'\n\n---\n\nBased on the above, please generate the report section text as instructed.'});
     const sys=`You are a senior Quantity Surveyor at Cuthbert Smith Group Inc. (CSG), a professional quantity surveying and construction cost management firm in Alberta, Canada. You specialize in mortgage monitoring reports for institutional construction lenders.\n\nCSG writing style:\n- Professional, formal, third-person\n- Concise and factual — no unnecessary padding\n- Standard Canadian construction industry terminology\n- Specific figures stated precisely; uncertainties flagged with [brackets]\n- Reports addressed to the lender; borrower mentioned in third person\n- Standard phrases: "We have reviewed...", "We confirm...", "We have calculated..."`;
-    const res=await fetch('/.netlify/functions/claude',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:1000,system:sys+'\n\n'+def.prompt,messages:[{role:'user',content:blocks}]})});
+    const res=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:1000,system:sys+'\n\n'+def.prompt,messages:[{role:'user',content:blocks}]})});
     if(!res.ok){const err=await res.json().catch(()=>({}));throw new Error(err.error?.message||`API error ${res.status}`);}
     const data=await res.json();
     sec.text=data.content.filter(b=>b.type==='text').map(b=>b.text).join('');
