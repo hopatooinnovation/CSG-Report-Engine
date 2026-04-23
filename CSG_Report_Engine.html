@@ -1,0 +1,650 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CSG Report Engine</title>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,500;0,9..144,600;1,9..144,300&family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --orange:#E8871E;--orange-light:#FAE8D0;--orange-dark:#C06A0A;
+  --dark:#141412;--dark2:#1E1E1B;--dark3:#2A2A26;
+  --gray:#888780;--gray-light:#C8C7C0;--gray-xlight:#EDECEA;
+  --bg:#F6F5F1;--card:#FFFFFF;--border:#E2E0D8;
+  --text:#1A1A17;--text2:#5A5955;--text3:#8A8880;
+  --green:#2E7D4F;--red:#C0392B;--blue:#1A5FA8;
+  --sidebar-w:270px;--topbar-h:60px;--radius:10px;
+}
+html,body{height:100%;overflow:hidden;background:var(--bg);font-family:'DM Sans',sans-serif;color:var(--text);font-size:14px}
+.shell{display:flex;height:100vh;overflow:hidden}
+.sidebar{width:var(--sidebar-w);min-width:var(--sidebar-w);background:var(--dark);display:flex;flex-direction:column;overflow:hidden;z-index:10}
+.main{flex:1;display:flex;flex-direction:column;overflow:hidden;min-width:0}
+.sb-header{padding:20px 18px 16px;border-bottom:1px solid var(--dark3)}
+.sb-logo{display:flex;align-items:center;gap:10px;margin-bottom:14px}
+.sb-logo-mark{width:32px;height:32px;background:var(--orange);border-radius:6px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.sb-logo-mark svg{width:18px;height:18px;fill:white}
+.sb-brand{font-family:'Fraunces',serif;font-size:15px;font-weight:600;color:white;line-height:1.1}
+.sb-brand span{display:block;font-size:10px;font-weight:300;color:var(--gray);font-family:'DM Sans',sans-serif;letter-spacing:.04em;margin-top:2px}
+.sb-project{background:var(--dark3);border-radius:8px;padding:10px 12px;cursor:pointer;transition:background .15s}
+.sb-project:hover{background:#333330}
+.sb-project-label{font-size:9px;letter-spacing:.08em;color:var(--gray);text-transform:uppercase;margin-bottom:4px;display:flex;justify-content:space-between}
+.sb-project-name{font-size:12px;color:white;font-weight:500;line-height:1.3}
+.sb-project-sub{font-size:10px;color:var(--gray);margin-top:2px}
+.sb-nav{flex:1;overflow-y:auto;padding:10px;scrollbar-width:thin;scrollbar-color:var(--dark3) transparent}
+.sb-section-label{font-size:9px;letter-spacing:.1em;color:var(--gray);text-transform:uppercase;padding:8px 8px 4px;font-weight:500}
+.sb-nav-item{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:7px;cursor:pointer;transition:all .15s;border:none;background:none;width:100%;text-align:left;color:var(--gray-light)}
+.sb-nav-item:hover{background:var(--dark3);color:white}
+.sb-nav-item.active{background:rgba(232,135,30,.15);color:var(--orange)}
+.nav-icon{width:18px;text-align:center;font-size:13px;flex-shrink:0;color:var(--gray)}
+.nav-text{flex:1;font-size:12px;font-weight:500;line-height:1.2}
+.nav-sub{font-size:9px;font-weight:300;color:var(--gray);margin-top:1px}
+.nav-status{width:7px;height:7px;border-radius:50%;flex-shrink:0}
+.nav-status.empty{background:var(--dark3);border:1px solid var(--dark2)}
+.nav-status.partial{background:rgba(232,135,30,.5)}
+.nav-status.done{background:var(--green)}
+.sb-footer{padding:12px 14px;border-top:1px solid var(--dark3)}
+.progress-bar-wrap{background:var(--dark3);border-radius:4px;height:4px;margin-top:8px;overflow:hidden}
+.progress-bar-fill{height:100%;background:var(--orange);border-radius:4px;transition:width .5s ease}
+.progress-label{display:flex;justify-content:space-between;align-items:center;margin-bottom:4px}
+.progress-label span{font-size:10px;color:var(--gray)}
+.progress-label strong{font-size:11px;color:white}
+.save-indicator{font-size:9px;color:var(--gray);text-align:center;margin-top:8px;min-height:14px;transition:color .3s}
+.save-indicator.saving{color:var(--orange)}
+.save-indicator.saved{color:var(--green)}
+.topbar{height:var(--topbar-h);background:var(--card);border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 24px;gap:16px;flex-shrink:0}
+.topbar-title{flex:1}
+.topbar-title h2{font-family:'Fraunces',serif;font-size:16px;font-weight:600;color:var(--text);line-height:1}
+.topbar-title p{font-size:11px;color:var(--text3);margin-top:2px}
+.topbar-actions{display:flex;align-items:center;gap:8px}
+.btn{display:inline-flex;align-items:center;gap:6px;padding:8px 16px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;border:none;transition:all .15s;font-family:'DM Sans',sans-serif;white-space:nowrap}
+.btn-primary{background:var(--orange);color:white}
+.btn-primary:hover{background:var(--orange-dark);transform:translateY(-1px);box-shadow:0 4px 12px rgba(232,135,30,.3)}
+.btn-secondary{background:var(--gray-xlight);color:var(--text2);border:1px solid var(--border)}
+.btn-secondary:hover{background:var(--border)}
+.btn-ghost{background:transparent;color:var(--text2);border:1px solid var(--border)}
+.btn-ghost:hover{background:var(--gray-xlight)}
+.btn-ai{background:linear-gradient(135deg,#1a1a17,#2a2a26);color:white;border:1px solid rgba(255,255,255,.1)}
+.btn-ai:hover{background:linear-gradient(135deg,#2a2a26,#3a3a36)}
+.btn-ai:disabled{opacity:.4;cursor:not-allowed}
+.btn-sm{padding:5px 11px;font-size:11px;border-radius:6px}
+.btn-danger{background:#FEF2F2;color:var(--red);border:1px solid #FECACA}
+.btn-danger:hover{background:#FEE2E2}
+.content{flex:1;overflow-y:auto;padding:24px;scrollbar-width:thin;scrollbar-color:var(--border) transparent}
+@keyframes fadeIn{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:translateY(0)}}
+.section-header{margin-bottom:20px}
+.section-badge{display:inline-flex;align-items:center;gap:6px;background:var(--orange-light);color:var(--orange-dark);border-radius:20px;padding:4px 12px;font-size:10px;font-weight:600;letter-spacing:.05em;margin-bottom:10px}
+.section-header h1{font-family:'Fraunces',serif;font-size:22px;font-weight:600;line-height:1.2}
+.section-header p{font-size:13px;color:var(--text2);margin-top:6px;max-width:600px;line-height:1.5}
+.card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden}
+.card-header{padding:14px 18px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
+.card-title{font-size:12px;font-weight:600;color:var(--text);letter-spacing:.02em;display:flex;align-items:center;gap:8px}
+.card-body{padding:18px}
+.upload-zone{border:2px dashed var(--border);border-radius:var(--radius);padding:28px 20px;text-align:center;cursor:pointer;transition:all .2s;background:var(--bg);position:relative}
+.upload-zone:hover,.upload-zone.drag-over{border-color:var(--orange);background:var(--orange-light)}
+.upload-zone input[type=file]{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%}
+.upload-icon{font-size:28px;margin-bottom:8px;opacity:.6}
+.upload-title{font-size:13px;font-weight:600;color:var(--text);margin-bottom:4px}
+.upload-sub{font-size:11px;color:var(--text3)}
+.upload-accepts{display:inline-block;margin-top:8px;background:var(--gray-xlight);border-radius:4px;padding:2px 8px;font-size:10px;color:var(--text3);font-family:'DM Mono',monospace}
+.file-list{margin-top:12px;display:flex;flex-direction:column;gap:6px}
+.file-item{display:flex;align-items:center;gap:10px;background:var(--bg);border:1px solid var(--border);border-radius:7px;padding:8px 12px}
+.file-icon{font-size:16px;flex-shrink:0}
+.file-info{flex:1;min-width:0}
+.file-name{font-size:12px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.file-size{font-size:10px;color:var(--text3)}
+.file-remove{background:none;border:none;cursor:pointer;color:var(--gray);font-size:14px;padding:2px;border-radius:4px;transition:color .1s;flex-shrink:0}
+.file-remove:hover{color:var(--red)}
+.file-status{font-size:10px;font-weight:600;padding:2px 6px;border-radius:4px;flex-shrink:0;background:#DCFCE7;color:var(--green)}
+.ai-action-bar{display:flex;align-items:center;gap:10px;margin:16px 0 10px}
+.ai-status{flex:1;font-size:11px;color:var(--text3);display:flex;align-items:center;gap:6px}
+.spinner{width:14px;height:14px;border:2px solid var(--border);border-top-color:var(--orange);border-radius:50%;animation:spin .8s linear infinite;flex-shrink:0}
+@keyframes spin{to{transform:rotate(360deg)}}
+.ai-badge{display:inline-flex;align-items:center;gap:4px;font-size:9px;font-weight:600;letter-spacing:.06em;background:var(--dark);color:white;border-radius:4px;padding:2px 6px}
+.textarea-wrap{position:relative}
+.report-textarea{width:100%;min-height:200px;border:1px solid var(--border);border-radius:8px;padding:14px;font-size:13px;font-family:'DM Sans',sans-serif;color:var(--text);line-height:1.6;resize:vertical;background:var(--card);transition:border-color .15s;outline:none}
+.report-textarea:focus{border-color:var(--orange);box-shadow:0 0 0 3px rgba(232,135,30,.1)}
+.report-textarea.ai-populated{border-color:rgba(46,125,79,.3);background:#FAFFFE}
+.report-textarea::placeholder{color:var(--text3)}
+.char-count{position:absolute;bottom:8px;right:10px;font-size:10px;color:var(--text3);font-family:'DM Mono',monospace;pointer-events:none}
+.textarea-actions{display:flex;align-items:center;justify-content:space-between;margin-top:8px}
+.form-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.form-group{display:flex;flex-direction:column;gap:5px}
+.form-group.full{grid-column:1/-1}
+.form-label{font-size:11px;font-weight:600;color:var(--text2);letter-spacing:.02em}
+.form-input,.form-select{width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:7px;font-size:13px;font-family:'DM Sans',sans-serif;color:var(--text);background:var(--card);outline:none;transition:border-color .15s}
+.form-input:focus,.form-select:focus{border-color:var(--orange);box-shadow:0 0 0 3px rgba(232,135,30,.1)}
+.two-col{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px}
+.stack{display:flex;flex-direction:column;gap:16px}
+.static-banner{display:flex;align-items:flex-start;gap:12px;background:#EFF6FF;border:1px solid #BFDBFE;border-radius:8px;padding:12px 14px;margin-bottom:16px}
+.static-banner p{font-size:12px;color:#1E40AF;line-height:1.5}
+.info-chip{display:inline-flex;align-items:center;gap:4px;background:var(--gray-xlight);border-radius:4px;padding:2px 8px;font-size:10px;color:var(--text2)}
+/* Projects screen */
+.projects-screen{flex:1;overflow-y:auto;padding:32px;animation:fadeIn .2s ease}
+.projects-header{margin-bottom:28px}
+.projects-header h1{font-family:'Fraunces',serif;font-size:26px;font-weight:600}
+.projects-header p{font-size:13px;color:var(--text2);margin-top:6px}
+.projects-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:16px}
+.project-card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:18px;cursor:pointer;transition:all .15s;position:relative}
+.project-card:hover{border-color:var(--orange);box-shadow:0 4px 16px rgba(232,135,30,.12);transform:translateY(-1px)}
+.project-card-new{border:2px dashed var(--border);display:flex;align-items:center;justify-content:center;flex-direction:column;gap:8px;min-height:120px;color:var(--text3)}
+.project-card-new:hover{border-color:var(--orange);color:var(--orange);background:var(--orange-light)}
+.project-card-new-icon{font-size:28px}
+.project-card-new-label{font-size:13px;font-weight:600}
+.pc-ref{font-size:9px;font-weight:600;letter-spacing:.08em;color:var(--orange);background:var(--orange-light);border-radius:4px;padding:2px 6px;margin-bottom:8px;display:inline-block}
+.pc-name{font-family:'Fraunces',serif;font-size:15px;font-weight:600;line-height:1.2;margin-bottom:4px}
+.pc-address{font-size:11px;color:var(--text3);margin-bottom:10px;line-height:1.4}
+.pc-meta{display:flex;align-items:center;justify-content:space-between;margin-top:10px;padding-top:10px;border-top:1px solid var(--border)}
+.pc-type{font-size:10px;font-weight:600;color:var(--text2)}
+.pc-date{font-size:10px;color:var(--text3)}
+.pc-delete{position:absolute;top:10px;right:10px;background:none;border:none;cursor:pointer;color:var(--gray);font-size:14px;padding:4px;border-radius:4px;opacity:0;transition:all .15s}
+.project-card:hover .pc-delete{opacity:1}
+.pc-delete:hover{color:var(--red);background:#FEF2F2}
+/* Loading */
+.loading-overlay{position:fixed;inset:0;background:var(--bg);z-index:200;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:16px}
+.loading-overlay.hidden{display:none}
+.loading-logo{width:48px;height:48px;background:var(--orange);border-radius:10px;display:flex;align-items:center;justify-content:center}
+.loading-logo svg{width:26px;height:26px;fill:white}
+.loading-text{font-family:'Fraunces',serif;font-size:16px;font-weight:600}
+.loading-sub{font-size:12px;color:var(--text3)}
+/* Modal */
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:100;display:flex;align-items:stretch;backdrop-filter:blur(4px);opacity:0;pointer-events:none;transition:opacity .25s}
+.modal-overlay.open{opacity:1;pointer-events:all}
+.modal{width:780px;max-width:90vw;background:var(--card);margin-left:auto;height:100vh;display:flex;flex-direction:column;box-shadow:-20px 0 60px rgba(0,0,0,.2);transform:translateX(40px);transition:transform .3s cubic-bezier(.16,1,.3,1)}
+.modal-overlay.open .modal{transform:translateX(0)}
+.modal-header{padding:20px 24px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;flex-shrink:0;background:var(--dark)}
+.modal-title{font-family:'Fraunces',serif;font-size:18px;color:white;font-weight:600}
+.modal-sub{font-size:11px;color:var(--gray);margin-top:2px}
+.modal-close{background:var(--dark3);border:none;color:var(--gray);width:30px;height:30px;border-radius:6px;cursor:pointer;font-size:16px;display:flex;align-items:center;justify-content:center}
+.modal-close:hover{color:white}
+.modal-body{flex:1;overflow-y:auto;padding:0;scrollbar-width:thin}
+.modal-footer{padding:16px 24px;border-top:1px solid var(--border);display:flex;gap:8px;justify-content:flex-end;flex-shrink:0}
+/* Compiled report */
+.report-doc{padding:32px 40px;max-width:660px;margin:0 auto}
+.report-doc-header{text-align:center;padding-bottom:24px;border-bottom:2px solid var(--dark);margin-bottom:24px}
+.report-doc-logo-area{display:flex;align-items:center;justify-content:center;gap:10px;margin-bottom:12px}
+.report-doc-logo-box{width:36px;height:36px;background:var(--orange);border-radius:7px;display:flex;align-items:center;justify-content:center}
+.report-doc-logo-box svg{width:20px;height:20px;fill:white}
+.report-doc-company{font-family:'Fraunces',serif;font-size:18px;font-weight:600}
+.report-doc-meta{font-size:11px;color:var(--text3);margin-top:6px}
+.report-doc-title{font-family:'Fraunces',serif;font-size:20px;font-weight:600;margin:12px 0 4px}
+.report-section{margin-bottom:28px;padding-bottom:28px;border-bottom:1px solid var(--border)}
+.report-section-header{display:flex;align-items:baseline;gap:12px;margin-bottom:10px}
+.report-section-num{font-size:10px;font-weight:700;letter-spacing:.06em;color:var(--orange);background:var(--orange-light);padding:3px 8px;border-radius:4px;white-space:nowrap}
+.report-section-title{font-family:'Fraunces',serif;font-size:16px;font-weight:500}
+.report-section-content{font-size:13px;color:var(--text2);line-height:1.7;white-space:pre-wrap}
+.report-section-empty{font-size:12px;color:var(--text3);font-style:italic;background:var(--bg);border-radius:6px;padding:12px 14px;border:1px dashed var(--border)}
+::-webkit-scrollbar{width:6px}::-webkit-scrollbar-track{background:transparent}::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
+@media(max-width:700px){.shell{flex-direction:column}.sidebar{width:100%;min-width:0;flex-direction:row;height:auto}.sb-header,.sb-footer{display:none}.sb-nav{display:flex;flex-direction:row;padding:6px;gap:4px;overflow-x:auto}.sb-section-label,.nav-sub,.nav-status{display:none}.sb-nav-item{padding:6px 10px;flex-direction:column;gap:2px;min-width:60px;align-items:center}.form-grid,.two-col{grid-template-columns:1fr}.projects-grid{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+
+<div class="loading-overlay" id="loading-overlay">
+  <div class="loading-logo"><svg viewBox="0 0 24 24"><path d="M12 2L2 19h20L12 2zm0 4l7 13H5L12 6z"/></svg></div>
+  <div class="loading-text">CSG Report Engine</div>
+  <div class="loading-sub" id="loading-sub">Connecting to database…</div>
+</div>
+
+<div class="shell" id="app-shell" style="display:none">
+  <aside class="sidebar">
+    <div class="sb-header">
+      <div class="sb-logo">
+        <div class="sb-logo-mark"><svg viewBox="0 0 24 24"><path d="M12 2L2 19h20L12 2zm0 4l7 13H5L12 6z"/></svg></div>
+        <div class="sb-brand">CSG Report Engine<span>Cuthbert Smith Group Inc.</span></div>
+      </div>
+      <div class="sb-project" onclick="goToProjects()" title="Switch project">
+        <div class="sb-project-label">Active project <span style="font-size:8px">← switch</span></div>
+        <div class="sb-project-name" id="sb-project-name">No project selected</div>
+        <div class="sb-project-sub" id="sb-project-sub">—</div>
+      </div>
+    </div>
+    <nav class="sb-nav" id="sb-nav"></nav>
+    <div class="sb-footer">
+      <div class="progress-label"><span>Report completion</span><strong id="progress-pct">0%</strong></div>
+      <div class="progress-bar-wrap"><div class="progress-bar-fill" id="progress-bar" style="width:0%"></div></div>
+      <div class="save-indicator" id="save-indicator">All changes saved</div>
+    </div>
+  </aside>
+
+  <main class="main" id="main-area">
+    <div id="projects-view" style="display:none;flex:1;overflow-y:auto" class="projects-screen">
+      <div class="projects-header"><h1>Projects</h1><p>Select a project to continue, or create a new one.</p></div>
+      <div class="projects-grid" id="projects-grid"></div>
+    </div>
+    <div id="editor-view" style="display:none;flex:1;flex-direction:column;overflow:hidden">
+      <header class="topbar">
+        <div class="topbar-title">
+          <h2 id="topbar-title">Project Setup</h2>
+          <p id="topbar-sub">Enter project details to begin</p>
+        </div>
+        <div class="topbar-actions">
+          <button class="btn btn-secondary btn-sm" onclick="clearSection()">Clear section</button>
+          <button class="btn btn-primary" onclick="openCompile()">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+            Compile Report
+          </button>
+        </div>
+      </header>
+      <div class="content" id="content"></div>
+    </div>
+  </main>
+</div>
+
+<div class="modal-overlay" id="compile-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <div><div class="modal-title">Compiled Report</div><div class="modal-sub" id="modal-report-type">—</div></div>
+      <button class="modal-close" onclick="closeCompile()">✕</button>
+    </div>
+    <div class="modal-body" id="modal-body"></div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost btn-sm" onclick="closeCompile()">Close</button>
+      <button class="btn btn-secondary btn-sm" onclick="copyReport()">Copy all text</button>
+      <button class="btn btn-primary btn-sm" onclick="printReport()">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
+        Save as PDF
+      </button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── SUPABASE ──────────────────────────────────────────────────
+const SUPABASE_URL = 'https://sukbelpzqpaiqkxslzky.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InN1a2JlbHB6cXBhaXFreHNsemt5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY2NTUyNjYsImV4cCI6MjA5MjIzMTI2Nn0.eKGHdYNfRcGYawctY7JVhOJPh18orBoSVFmj5JLkRM0';
+const db = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+if(typeof pdfjsLib !== 'undefined') pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+// ── SECTION DEFINITIONS ───────────────────────────────────────
+const SECTIONS = [
+  {id:'setup',nav:'Project Setup',navSub:'Project & loan details',icon:'⚙',badge:'SETUP',title:'Project Setup',desc:'Enter the core project details. These populate the cover letter, section headers, and key financial figures throughout the report.',type:'form'},
+  {id:'s1_group',type:'group',nav:'Section 1.0',navSub:'Budget, cost summaries & cash flow'},
+  {id:'s1_1',nav:'1.1 Purpose of Report',navSub:'Static boilerplate',icon:'◎',badge:'SECTION 1.1',title:'1.1  Purpose of the Report',desc:'Standard CSG boilerplate confirming the purpose of the Preliminary Report. Carried forward unchanged.',type:'static',staticText:"The purpose of this report is to review the Borrowers' documentation, cost budgets, approvals, insurance and the like for the project and to provide an assessment of the same and make comments where appropriate. An assessment of probable cash flow is also undertaken."},
+  {id:'s1_2',nav:'1.2 Description of Project',navSub:'Site, building & scope',icon:'◎',badge:'SECTION 1.2',title:'1.2  Description of the Project',desc:'Upload drawings, site plans, or building plans. AI will generate a comprehensive project description.',accepts:'.pdf,.jpg,.jpeg,.png',acceptsLabel:'PDF · JPG · PNG',uploadTitle:'Site plan, building plans or drawings',prompt:`You are a professional Quantity Surveyor at CSG writing Section 1.2 (Description of the Project) of a Preliminary Mortgage Monitoring Report for an Alberta construction lender.\n\nWrite a comprehensive project description in CSG standard format as flowing paragraphs:\nP1 — Site location: address, community, city quadrant, site boundaries, legal description (Lot/Block/Plan), site area ft2.\nP2 — Building: development type, number/type of units, total GFA ft2.\nP3 — Structural: foundation, superstructure, roof.\nP4 — Exterior: cladding, windows, roofing, soffits.\nP5 — Interior: partitions, finishes, floor coverings, kitchen/bath, mechanical, electrical.\nP6 — Site works: services, landscaping, parking, fencing.\nCLOSING: "Reduced copies of the Site Plan and Building Plans & Elevations are provided as Appendix 'A' of this Preliminary Report for reference."\nUse [brackets] for unknowns. 300-400 words.`},
+  {id:'s1_3',nav:'1.3 Methodology',navSub:'Static boilerplate',icon:'◎',badge:'SECTION 1.3',title:'1.3  Methodology',desc:'Standard CSG methodology statement. Pre-populated boilerplate.',type:'static',staticText:'We have reviewed the information provided by the Borrower. We have discussed construction and soft costs and checked the available information. We have also discussed schedule, approvals, bonding, insurance and other general matters relating to the project.'},
+  {id:'s1_4',nav:"1.4 Borrower's Budget",navSub:'Budget reconciliation',icon:'◎',badge:'SECTION 1.4',title:"1.4  Borrower's Project Budget",desc:"Upload the Borrower's project budget (Excel or PDF). AI will write the budget reconciliation commentary.",accepts:'.pdf,.xlsx,.xls,.csv',acceptsLabel:'PDF · XLSX · CSV',uploadTitle:"Borrower's project budget",prompt:`Write Section 1.4 (Borrower's Project Budget). Opening confirming total confirmed budget. Summary table: Construction, Land, Soft Costs, Finance Fees, Contingency, Interest Reserve, GST, Project Costs, Less Borrower Equity, Net Loan Amount, Total Loan Amount. Closing referencing Appendix 'B' and 'C'. Use actual figures; [brackets] for unknowns. Professional, third-person.`},
+  {id:'s1_5',nav:'1.5 Project Budget Review',navSub:'Cost category commentary',icon:'◎',badge:'SECTION 1.5',title:'1.5  Project Budget Review',desc:'Upload the project budget or GC contract. AI will generate commentary on each cost category.',accepts:'.pdf,.xlsx,.xls,.csv',acceptsLabel:'PDF · XLSX · CSV',uploadTitle:'Project budget or cost analysis',prompt:`Write Section 1.5 (Project Budget Review) with bold subsection headings: 1.5.1 Construction Budget (amount, contract type, contractor, cost/ft2, reasonableness). 1.5.2 Land Cost. Then 1.5.3–1.5.13 for each soft cost visible. 1.5.15 Conclusion (standard CSG feasibility closing). Professional, detailed.`},
+  {id:'s1_6',nav:'1.6 Construction Cost Summary',navSub:'Trade-by-trade table',icon:'◎',badge:'SECTION 1.6',title:'1.6  Construction Cost Summary',desc:'Upload the COSTSUM workbook or CCDC Application for Payment.',accepts:'.pdf,.xlsx,.xls,.csv',acceptsLabel:'PDF · XLSX · CSV',uploadTitle:'COSTSUM workbook or CCDC Application',prompt:`Write Section 1.6 narrative (2-3 paragraphs): (1) summary prepared from GC Schedule of Values/CCDC; (2) notable trades (100% complete, 0% not started, overall % complete, cost-to-complete reasonableness); (3) change orders if any. Preliminary: all trades at 0%. 100-150 words.`},
+  {id:'s1_7',nav:'1.7 Capital Cost Summary',navSub:'Full project cost rollup',icon:'◎',badge:'SECTION 1.7',title:'1.7  Capital Cost Summary',desc:'Upload the COSTSUM workbook or budget.',accepts:'.pdf,.xlsx,.xls,.csv',acceptsLabel:'PDF · XLSX · CSV',uploadTitle:'COSTSUM workbook or capital cost document',prompt:`Write Section 1.7 narrative (80-120 words): total project cost, funding split (loan vs. equity), confirm loan ties to authorized credit, contingency check (% of estimated cost to complete). Short, factual.`},
+  {id:'s1_8',nav:'1.8 Loan Calculation Check',navSub:'Advance reconciliation',icon:'◎',badge:'SECTION 1.8',title:'1.8  Loan Calculation Check',desc:"Upload the Loan Calculation Check or Borrower's Request for Advance.",accepts:'.pdf,.xlsx,.xls',acceptsLabel:'PDF · XLSX',uploadTitle:'Loan Calculation Check or draw request',prompt:`Write Section 1.8 narrative (80-120 words): confirm total project cost/equity/work in place, state Potential Loan Amount Due, confirm Financing Requirement aligns with authorized loan, note interest accrued. Professional, concise.`},
+  {id:'s1_9',nav:'1.9 Anticipated Cash Flow',navSub:'Monthly draw schedule',icon:'◎',badge:'SECTION 1.9',title:'1.9  Anticipated Cash Flow',desc:'Upload the CASHFLOW workbook or cash flow schedule.',accepts:'.pdf,.xlsx,.xls,.csv',acceptsLabel:'PDF · XLSX · CSV',uploadTitle:'CASHFLOW workbook',prompt:`Write Section 1.9 narrative (80-120 words): cash flow based on construction schedule, projected total interest to completion + tail period, interest rate used, compare projected vs. budgeted interest, adequacy conclusion. Professional, concise.`},
+  {id:'s2_group',type:'group',nav:'Section 2.0',navSub:'Funding conditions & documentation'},
+  {id:'s2_1',nav:'2.1 Funding Conditions',navSub:'Lender term sheet / CMHC',icon:'◎',badge:'SECTION 2.1',title:'2.1  Funding Conditions',desc:"Upload the lender's term sheet, commitment letter, or CMHC Certificate of Insurance.",accepts:'.pdf,.jpg,.jpeg,.png',acceptsLabel:'PDF · JPG · PNG',uploadTitle:'Lender term sheet or CMHC COI',prompt:`Write Section 2.1 (Funding Conditions). State document received, issuer, date, key loan/insurance parameters. Appendix reference. If CMHC COI: note CMHC requirements CSG addresses in subsequent sections. 60-100 words.`},
+  {id:'s2_2_1',nav:'2.2.1 Drawings & Specifications',navSub:'Architectural drawings review',icon:'◎',badge:'SECTION 2.2.1',title:'2.2.1  Drawings and Specifications',desc:'Upload the architectural drawings, site plan, or building permit drawings.',accepts:'.pdf,.jpg,.jpeg,.png',acceptsLabel:'PDF · JPG · PNG',uploadTitle:'Architectural drawings or site plan',prompt:`Write Section 2.2.1 (Drawings and Specifications): (1) CSG has reviewed drawings/specs as provided by Borrower; (2) table: Discipline | Consultant | Drawing Status; (3) standard CSG adequacy/zoning compliance confirmation; (4) reduced copies in Appendix 'A'. Use [brackets] for unknowns.`},
+  {id:'s2_2_2',nav:'2.2.2 Construction Contract',navSub:'Fixed price / stipulated sum',icon:'◎',badge:'SECTION 2.2.2',title:'2.2.2  Construction Stipulated Price Contract',desc:'Upload the CCDC 14, CCDC 2, or Fixed Price Construction Contract.',accepts:'.pdf,.xlsx,.xls',acceptsLabel:'PDF · XLSX',uploadTitle:'Construction contract',prompt:`Write Section 2.2.2 (Construction Stipulated Price Contract): fixed-price requirement confirmation; Borrower engaged [contractor] for stipulated sum $[X] plus GST; sub-trade contracts note; "no known concerns" confirmation; appendix reference. 100-150 words.`},
+  {id:'s2_2_3',nav:'2.2.3 Sub-Trades & Bonding',navSub:'Trade contractors & bonds',icon:'◎',badge:'SECTION 2.2.3',title:'2.2.3  Major Sub-Trades and Contract Bonding',desc:'Upload the schedule of trade contractors or bonding documents.',accepts:'.pdf,.xlsx,.xls',acceptsLabel:'PDF · XLSX',uploadTitle:'Trade contractor schedule or bonding documents',prompt:`Write Section 2.2.3 (Sub-Trades and Bonding): bonding requirement; obtained or waiver (if waiver: standard CSG waiver support language); appendix reference. 80-120 words.`},
+  {id:'s2_2_4',nav:'2.2.4 Construction Schedule',navSub:'Project timeline',icon:'◎',badge:'SECTION 2.2.4',title:'2.2.4  Construction Schedule',desc:"Upload the Borrower's construction schedule.",accepts:'.pdf,.xlsx,.xls,.jpg,.jpeg,.png',acceptsLabel:'PDF · XLSX · JPG',uploadTitle:'Construction schedule',prompt:`Write Section 2.2.4 (Construction Schedule): start and completion dates, reasonableness assessment, standard weather/labour/supply caution, appendix reference. Use [brackets] if dates not visible. 60-80 words.`},
+  {id:'s2_2_5',nav:'2.2.5 Purchase Contract',navSub:'Land / property purchase',icon:'◎',badge:'SECTION 2.2.5',title:'2.2.5  Residential / Commercial Purchase Contract',desc:'Upload the purchase and sale agreement.',accepts:'.pdf,.jpg,.jpeg,.png',acceptsLabel:'PDF · JPG · PNG',uploadTitle:'Purchase and sale agreement',prompt:`Write Section 2.2.5 (Purchase Contract): purchaser, vendor, legal description, purchase price, date. Appendix reference. If leasehold: note lease details. 40-60 words.`},
+  {id:'s2_2_6',nav:'2.2.6 Certificate of Title',navSub:'Land title confirmation',icon:'◎',badge:'SECTION 2.2.6',title:'2.2.6  Certificate of Title',desc:'Upload the Certificate of Title (ARLO search).',accepts:'.pdf,.jpg,.jpeg,.png',acceptsLabel:'PDF · JPG · PNG',uploadTitle:'Certificate of Title (ARLO search)',prompt:`Write Section 2.2.6 (Certificate of Title): ARLO number, owner, legal description, most recent transfer, caveats/encumbrances (flag if lender should be aware), clean title statement if applicable, appendix reference. 80-120 words.`},
+  {id:'s2_2_7',nav:'2.2.7 Site Survey',navSub:'Land / design survey',icon:'◎',badge:'SECTION 2.2.7',title:'2.2.7  Site Survey',desc:'Upload the site survey or real property report.',accepts:'.pdf,.jpg,.jpeg,.png',acceptsLabel:'PDF · JPG · PNG',uploadTitle:'Site survey or real property report',prompt:`Write Section 2.2.7 (Site Survey): type and firm, cost note, further surveys expected (Setting Out Survey note), appendix reference. 60-80 words.`},
+  {id:'s2_2_8',nav:'2.2.8 Geotechnical Report',navSub:'Geotech investigation',icon:'◎',badge:'SECTION 2.2.8',title:'2.2.8  Geotechnical Investigation',desc:'Upload the geotechnical report, or generate without upload for standard "not provided" commentary.',accepts:'.pdf',acceptsLabel:'PDF',uploadTitle:'Geotechnical investigation report',prompt:`Write Section 2.2.8 (Geotechnical Investigation). If report provided: firm, date, key recommendations, "no known concerns", appendix reference. If no report: standard CSG "not provided" commentary (structural engineer assessed site, absence not unusual for this project type). 60-100 words.`},
+  {id:'s2_2_9',nav:'2.2.9 Environmental (Phase I ESA)',navSub:'Phase I environmental assessment',icon:'◎',badge:'SECTION 2.2.9',title:'2.2.9  Environmental Site Assessment',desc:'Upload the Phase I Environmental Site Assessment report.',accepts:'.pdf',acceptsLabel:'PDF',uploadTitle:'Phase I Environmental Site Assessment',prompt:`Write Section 2.2.9 (Environmental Site Assessment): report reference, date, firm, client; key executive summary finding (quoted conclusion 1-2 sentences); site history note; "no known concerns"; appendix reference. 80-120 words.`},
+  {id:'s2_2_10',nav:'2.2.10 Development Permit',navSub:'City of Calgary / Edmonton DP',icon:'◎',badge:'SECTION 2.2.10',title:'2.2.10  Development Permit',desc:'Upload the Development Permit.',accepts:'.pdf,.jpg,.jpeg,.png',acceptsLabel:'PDF · JPG · PNG',uploadTitle:'Development Permit',prompt:`Write Section 2.2.10 (Development Permit): permit number, dates, issuing authority; authorized scope; commencement deadline; conditions note (typical for this project type); appendix reference. 80-120 words.`},
+  {id:'s2_2_11',nav:'2.2.11–13 Levies & Deposits',navSub:'Off-site levy, address, deposits',icon:'◎',badge:'SECTION 2.2.11–13',title:'2.2.11–2.2.13  Address Assignment, Off-Site Levy & Security Deposits',desc:'Upload municipal levy agreements, address assignment notices, or security deposit correspondence.',accepts:'.pdf,.jpg,.jpeg,.png',acceptsLabel:'PDF · JPG · PNG',uploadTitle:'Address assignment, levy agreement or security deposits',prompt:`Write Sections 2.2.11–2.2.13. For each document: 2.2.11 Address Assignment (old→new, appendix ref); 2.2.12 Off-Site Levy (parties, date, amount, appendix ref); 2.2.13 Security Deposits (date, refundable amount, appendix ref). Omit any not provided. 30-50 words per subsection.`},
+  {id:'s2_2_14',nav:'2.2.14 Building Permit',navSub:'Municipal building permit',icon:'◎',badge:'SECTION 2.2.14',title:'2.2.14  Building Permit',desc:'Upload the Building Permit.',accepts:'.pdf,.jpg,.jpeg,.png',acceptsLabel:'PDF · JPG · PNG',uploadTitle:'Building Permit',prompt:`Write Section 2.2.14 (Building Permit): permit number, issue date, plans examiner; scope (building type, units, area/storeys, occupancy, sprinklered); building code edition; appendix reference. 80-120 words.`},
+  {id:'s2_2_15',nav:'2.2.15 Certificate of Insurance',navSub:'Construction & builders risk',icon:'◎',badge:'SECTION 2.2.15',title:'2.2.15  Certificate of Insurance',desc:'Upload the Certificate of Insurance (builders risk, GL, or CMHC COI).',accepts:'.pdf,.jpg,.jpeg,.png',acceptsLabel:'PDF · JPG · PNG',uploadTitle:'Certificate of Insurance or CMHC COI',prompt:`Write Section 2.2.15 (Certificate of Insurance). If CMHC COI: list all key parameters (Approved Lender, Borrower, Net Housing Loan, CMHC Premium, Total Loan, Units, First/Final Advance Dates). If Construction Insurance: insured, coverages and limits, expiry, lender as Certificate Holder/Additional Insured/First Loss Payee, flag if expiry within 60 days. Appendix reference. 80-150 words.`},
+  {id:'s2_2_16',nav:'2.2.16 New Home Registration',navSub:'NHW / rental use designation',icon:'◎',badge:'SECTION 2.2.16',title:'2.2.16  New Home Registration',desc:'Upload the New Home Warranty registration or approved rental use designation.',accepts:'.pdf,.jpg,.jpeg,.png',acceptsLabel:'PDF · JPG · PNG',uploadTitle:'New Home Warranty or rental use designation',prompt:`Write Section 2.2.16 (New Home Registration): document type, provider/issuer, key details (certificate number, units covered). Appendix reference. 40-60 words.`},
+  {id:'s2_2_17',nav:'2.2.17 Property Tax',navSub:'Tax bill & proof of payment',icon:'◎',badge:'SECTION 2.2.17',title:'2.2.17  Property Tax',desc:'Upload the Property Tax Bill and/or proof of payment.',accepts:'.pdf,.jpg,.jpeg,.png',acceptsLabel:'PDF · JPG · PNG',uploadTitle:'Property Tax Bill and proof of payment',prompt:`Write Section 2.2.17 (Property Tax): address, legal description, owner, assessment, annual tax + due date. If paid: confirm in full. If unpaid: flag outstanding, recommend Lender confirm prior to funding. Appendix reference. 60-100 words.`},
+  {id:'s2_2_18',nav:'2.2.18 Design Consultants',navSub:'Consultant agreements',icon:'◎',badge:'SECTION 2.2.18',title:'2.2.18  Design Consultants',desc:'Upload consultant engagement letters or agreements.',accepts:'.pdf,.xlsx,.xls',acceptsLabel:'PDF · XLSX',uploadTitle:'Consultant agreements or engagement letters',prompt:`Write Section 2.2.18 (Design Consultants). For each: firm, discipline, engagement date, fee. Format: "We note that [Firm] has been engaged by the Borrower as [Discipline] under an agreement dated [date]. The design fee is $[X] plus GST." Appendix reference. 20-40 words per consultant.`},
+  {id:'s2_2_19',nav:'2.2.19 Appraisal',navSub:'As-completed valuation',icon:'◎',badge:'SECTION 2.2.19',title:'2.2.19  Appraisal',desc:'Upload the appraisal report or executive summary.',accepts:'.pdf',acceptsLabel:'PDF',uploadTitle:'Appraisal report or executive summary',prompt:`Write Section 2.2.19 (Appraisal): firm, appraiser/designation (AACI), reference, report/effective date. List each valuation approach and result (Cost, Income Direct Cap with cap rate, Income GIM, Direct Comparison, Final As-Completed Value). If rental: monthly rates and NOI. Standard "provided directly to Lender" closing. Appendix reference. 120-180 words.`},
+  {id:'s2_2_20',nav:"2.2.20 Borrower's Equity",navSub:'Equity confirmation',icon:'◎',badge:'SECTION 2.2.20',title:"2.2.20  Borrower's Equity",desc:'Upload the equity confirmation document or mortgage statement.',accepts:'.pdf,.xlsx,.xls',acceptsLabel:'PDF · XLSX',uploadTitle:'Equity confirmation or mortgage statement',prompt:`Write Section 2.2.20 (Borrower's Equity): equity requirement, equity composition (land equity via mortgage and land value, or cash equity), confirm equity within appraised value. If cash equity: injection timing. Appendix reference. 60-80 words.`},
+  {id:'sother_group',type:'group',nav:'Other Sections',navSub:'Advance, progress & qualifications'},
+  {id:'s3',nav:'Section 3',navSub:'Sales / rental status',icon:'🏢',badge:'SECTION 3',title:'Section 3.0 — Unit Rental / Sales Status',desc:"Upload the current sales summary, rental agreements, or lease schedule.",accepts:'.pdf,.xlsx,.xls,.csv',acceptsLabel:'PDF · XLSX · CSV',uploadTitle:'Sales summary or rental agreements',prompt:`Write Section 3 (Unit Rental/Sales Status): lender presale/pre-lease requirements, current status (units sold/leased, contracted value, deposits), threshold met or not, units remaining. Sales documentation provided directly by Borrower to Lender. 100-180 words.`},
+  {id:'s4',nav:'Section 4',navSub:'Advance & important notes',icon:'💰',badge:'SECTION 4',title:'Section 4.0 — Calculation of Advance & Important Notes',desc:"Upload the Borrower's Request for Advance, Statutory Declaration, or accounts payable list.",accepts:'.pdf,.xlsx,.xls',acceptsLabel:'PDF · XLSX',uploadTitle:'Request for Advance or Stat Declaration',prompt:`Write Section 4 (Calculation of Advance and Important Notes). Structure: 4.1.1 Advance Recommendation; 4.1.2 Reconciliation to Borrower's Request; 4.2.1 Holdback (10%, AB Construction Lien Act); 4.2.2 Interest to date; 4.2.3 GST; 4.2.4 Budget changes; 4.2.5 Contingency % of cost to complete; 4.2.6 Funding sources; 4.2.7 Cashflow adequacy; 4.2.8 Statutory Declaration; 4.2.9 Compliance documentation; 4.2.10 Monitoring fees; standard CSG closing.`},
+  {id:'s5',nav:'Section 5',navSub:'Progress report',icon:'🔍',badge:'SECTION 5',title:'Section 5.0 — Progress Report & Construction Schedule',desc:'Upload site visit notes or photographs.',accepts:'.pdf,.txt,.jpg,.jpeg,.png',acceptsLabel:'PDF · TXT · JPG · PNG',uploadTitle:'Site visit notes or photographs',prompt:`Write Section 5. 5.1 Progress Report (site visit on [date]): structure by zone/floor/building with bold headings, concise bullet observations. 5.2 Construction Schedule: original completion date, current assessment, achievability, "We will monitor the progress and report accordingly." Factual, present tense.`},
+  {id:'s6',nav:'Section 6',navSub:'Report qualifications',icon:'⚖',badge:'SECTION 6',title:'Section 6.0 — Report Qualifications',desc:'Standard CSG qualifications boilerplate — pre-populated and carried forward unchanged.',type:'static',staticText:`Commentary and calculations within this report are based on source documentation as requested by Cuthbert Smith Group Inc. for assembly of this report and as provided by the Borrower and/or Borrower's representatives. Cuthbert Smith Group Inc. have undertaken reasonable investigation and review of such documentation and have reported as appropriate upon any noted omissions, non-disclosure, errors or inaccuracies. Should any such omissions, non-disclosure, error or inaccuracy not previously noted become apparent, Cuthbert Smith Group Inc. cannot be held responsible for loss arising from omissions, non-disclosure, errors or inaccuracies not uncovered during such reasonable investigation and review.\n\nThis report has been prepared by Cuthbert Smith Group Inc. acting in the capacity of a cost consultant, and whilst Cuthbert Smith Group Inc. undertake to draw attention to any observed matters of project concern as may be reasonably expected in this capacity, commentary provided herein is generally limited to matters affecting project costs as can be reasonably expected to be reported upon by a cost consultant.`},
+  {id:'s7',nav:'Section 7',navSub:'Photographs',icon:'📸',badge:'SECTION 7',title:'Section 7.0 — Photographs',desc:'Upload site visit photographs. AI will generate professional captions.',accepts:'.jpg,.jpeg,.png,.heic,.webp',acceptsLabel:'JPG · PNG · HEIC · WebP',uploadTitle:'Site visit photographs',prompt:`Write professional photo captions for Section 7. For each photo: concise caption (10-20 words) describing area/floor/building, work visible, construction stage. Format: "Photo 1: [description]." Factual, no speculation.`},
+  {id:'appendix',nav:'Appendices',navSub:'Supporting documents',icon:'📎',badge:'SECTION 8',title:'Section 8.0 — Appendices',desc:'Upload any remaining appendix documents. AI will generate the appendix index.',accepts:'.pdf,.xlsx,.xls,.docx',acceptsLabel:'PDF · XLSX · DOCX',uploadTitle:'Appendix documents',prompt:`List each uploaded document with its appendix letter (A through T as applicable) and one-line description in CSG standard labelling. Note any missing appendices with placeholder language.`}
+];
+
+// ── STATE ─────────────────────────────────────────────────────
+const STATE = {
+  activeSection:'setup', currentProjectId:null,
+  project:{name:'',address:'',lender:'',lenderContact:'',borrower:'',reportType:'Progress Report',reportNumber:'',reportDate:new Date().toISOString().split('T')[0],siteVisitDate:'',loanAmount:'',interestRate:'',completionDate:'',csgRef:'',csgContact:''},
+  sections:{}
+};
+
+function initSections(){
+  SECTIONS.forEach(s=>{
+    if(s.type==='group') return;
+    STATE.sections[s.id]={files:[],text:s.type==='static'?s.staticText:'',status:s.type==='static'?'done':'empty',generating:false};
+  });
+}
+initSections();
+
+// ── SAVE / LOAD ───────────────────────────────────────────────
+let saveTimer=null;
+function scheduleSave(){ setSaveInd('saving'); clearTimeout(saveTimer); saveTimer=setTimeout(doSave,1400); }
+function setSaveInd(s){
+  const el=document.getElementById('save-indicator'); if(!el) return;
+  el.className='save-indicator '+s;
+  if(s==='saving') el.textContent='Saving…';
+  else if(s==='saved'){el.textContent='✓ All changes saved';setTimeout(()=>{el.className='save-indicator';el.textContent='All changes saved';},2000);}
+  else el.textContent='All changes saved';
+}
+async function doSave(){
+  if(!STATE.currentProjectId) return;
+  const p=STATE.project;
+  try{
+    await db.from('projects').upsert({id:STATE.currentProjectId,name:p.name,address:p.address,csg_ref:p.csgRef,report_type:p.reportType,report_number:p.reportNumber,report_date:p.reportDate||null,site_visit_date:p.siteVisitDate||null,csg_contact:p.csgContact,anticipated_completion:p.completionDate||null,lender:p.lender,lender_contact:p.lenderContact,borrower:p.borrower,loan_amount:p.loanAmount,interest_rate:p.interestRate});
+    const rows=Object.entries(STATE.sections).map(([sid,sec])=>({project_id:STATE.currentProjectId,section_id:sid,section_text:sec.text||'',status:sec.status||'empty'}));
+    if(rows.length) await db.from('report_sections').upsert(rows,{onConflict:'project_id,section_id'});
+    setSaveInd('saved');
+  }catch(e){console.error('Save error:',e);setSaveInd('');}
+}
+
+async function loadProject(pid){
+  setLoading(true,'Loading project…');
+  try{
+    const{data:proj,error:pe}=await db.from('projects').select('*').eq('id',pid).single();
+    if(pe) throw pe;
+    STATE.currentProjectId=pid;
+    STATE.project={name:proj.name||'',address:proj.address||'',csgRef:proj.csg_ref||'',reportType:proj.report_type||'Progress Report',reportNumber:proj.report_number||'',reportDate:proj.report_date||new Date().toISOString().split('T')[0],siteVisitDate:proj.site_visit_date||'',csgContact:proj.csg_contact||'',completionDate:proj.anticipated_completion||'',lender:proj.lender||'',lenderContact:proj.lender_contact||'',borrower:proj.borrower||'',loanAmount:proj.loan_amount||'',interestRate:proj.interest_rate||''};
+    initSections();
+    const{data:secs}=await db.from('report_sections').select('*').eq('project_id',pid);
+    (secs||[]).forEach(r=>{if(STATE.sections[r.section_id]){STATE.sections[r.section_id].text=r.section_text||STATE.sections[r.section_id].text;STATE.sections[r.section_id].status=r.status||STATE.sections[r.section_id].status;}});
+    showEditorView(); updateSidebarProject(); renderNav(); switchSection('setup');
+  }catch(e){console.error(e);showToast('Error loading project: '+e.message);}
+  setLoading(false);
+}
+
+async function createNewProject(){
+  setLoading(true,'Creating project…');
+  try{
+    const{data,error}=await db.from('projects').insert({name:'New Project',report_type:'Progress Report',report_date:new Date().toISOString().split('T')[0]}).select().single();
+    if(error) throw error;
+    await loadProject(data.id);
+  }catch(e){console.error(e);showToast('Error creating project: '+e.message);setLoading(false);}
+}
+
+async function deleteProject(id,e){
+  e.stopPropagation();
+  if(!confirm('Delete this project and all its data? This cannot be undone.')) return;
+  const{error}=await db.from('projects').delete().eq('id',id);
+  if(error){showToast('Error deleting project');return;}
+  if(STATE.currentProjectId===id){STATE.currentProjectId=null;initSections();}
+  loadProjectsList();
+}
+
+async function loadProjectsList(){
+  showProjectsView();
+  const grid=document.getElementById('projects-grid');
+  grid.innerHTML='<div style="grid-column:1/-1;text-align:center;padding:40px;color:var(--text3)"><div class="spinner" style="margin:0 auto 12px"></div><div>Loading projects…</div></div>';
+  const{data:projects,error}=await db.from('projects').select('*').order('updated_at',{ascending:false});
+  if(error){grid.innerHTML='<div style="color:var(--red);padding:20px">Error loading projects: '+error.message+'</div>';return;}
+  const cards=(projects||[]).map(p=>`
+    <div class="project-card" onclick="loadProject('${p.id}')">
+      <button class="pc-delete" onclick="deleteProject('${p.id}',event)">✕</button>
+      ${p.csg_ref?`<div class="pc-ref">${esc(p.csg_ref)}</div>`:''}
+      <div class="pc-name">${esc(p.name||'Unnamed Project')}</div>
+      <div class="pc-address">${esc(p.address||'No address set')}</div>
+      <div class="pc-meta">
+        <span class="pc-type">${esc(p.report_type||'Progress Report')}${p.report_number?' '+esc(p.report_number):''}</span>
+        <span class="pc-date">${p.updated_at?new Date(p.updated_at).toLocaleDateString('en-CA'):'—'}</span>
+      </div>
+    </div>`).join('');
+  grid.innerHTML=`<div class="project-card project-card-new" onclick="createNewProject()"><div class="project-card-new-icon">＋</div><div class="project-card-new-label">New Project</div></div>${cards}`;
+}
+
+// ── VIEWS ─────────────────────────────────────────────────────
+function showProjectsView(){
+  const pv=document.getElementById('projects-view');
+  const ev=document.getElementById('editor-view');
+  pv.style.display='block'; ev.style.display='none';
+  document.getElementById('sb-nav').innerHTML='';
+}
+function showEditorView(){
+  const pv=document.getElementById('projects-view');
+  const ev=document.getElementById('editor-view');
+  pv.style.display='none'; ev.style.display='flex'; ev.style.flex='1'; ev.style.flexDirection='column'; ev.style.overflow='hidden';
+}
+function goToProjects(){loadProjectsList();}
+function setLoading(show,msg){
+  const o=document.getElementById('loading-overlay');
+  if(show){o.classList.remove('hidden');document.getElementById('loading-sub').textContent=msg||'Loading…';document.getElementById('app-shell').style.display='none';}
+  else{o.classList.add('hidden');document.getElementById('app-shell').style.display='flex';}
+}
+function updateSidebarProject(){
+  const p=STATE.project;
+  document.getElementById('sb-project-name').textContent=p.name||'New Project';
+  document.getElementById('sb-project-sub').textContent=(p.reportType||'Progress Report')+(p.reportNumber?' '+p.reportNumber:'');
+}
+
+// ── NAV ───────────────────────────────────────────────────────
+function renderNav(){
+  const nav=document.getElementById('sb-nav');
+  nav.innerHTML=SECTIONS.map(s=>{
+    if(s.type==='group') return `<div class="sb-section-label" style="margin-top:10px">${s.nav}</div>`;
+    const sec=STATE.sections[s.id]; const isActive=STATE.activeSection===s.id;
+    const isSub=s.id.startsWith('s1_')||s.id.startsWith('s2_');
+    return `<button class="sb-nav-item ${isActive?'active':''}" onclick="switchSection('${s.id}')" style="${isSub?'padding-left:22px':''}">
+      <span class="nav-icon" style="${isSub?'font-size:8px;opacity:.6':''}">${s.icon}</span>
+      <span style="flex:1"><div class="nav-text" style="${isSub?'font-size:11px':''}">${s.nav}</div><div class="nav-sub">${s.navSub}</div></span>
+      <span class="nav-status ${sec?sec.status:'empty'}"></span>
+    </button>`;
+  }).join('');
+  const completable=SECTIONS.filter(s=>s.type!=='form'&&s.type!=='group');
+  const done=completable.filter(s=>STATE.sections[s.id]?.status==='done').length;
+  const pct=Math.round((done/completable.length)*100);
+  document.getElementById('progress-bar').style.width=pct+'%';
+  document.getElementById('progress-pct').textContent=pct+'%';
+}
+
+function switchSection(id){
+  const def=SECTIONS.find(s=>s.id===id);
+  if(!def||def.type==='group') return;
+  STATE.activeSection=id; renderNav(); renderContent();
+  document.getElementById('topbar-title').textContent=def.title;
+  document.getElementById('topbar-sub').textContent=def.desc.substring(0,90)+(def.desc.length>90?'…':'');
+}
+
+// ── CONTENT ───────────────────────────────────────────────────
+function renderContent(){
+  const id=STATE.activeSection; const def=SECTIONS.find(s=>s.id===id); const sec=STATE.sections[id];
+  const content=document.getElementById('content');
+  if(def.type==='form'){content.innerHTML=renderSetupForm();return;}
+  if(def.type==='static'){content.innerHTML=renderStaticSection(def,sec);return;}
+  content.innerHTML=renderUploadSection(def,sec); updateCharCount(id);
+}
+
+function renderSetupForm(){
+  const p=STATE.project;
+  return `<div class="section-header"><div class="section-badge">⚙ SETUP</div><h1>Project Setup</h1><p>Project details entered here populate the cover letter, section headers, and key data fields throughout the report. Complete this before generating any section text.</p></div>
+  <div class="stack">
+    <div class="card"><div class="card-header"><div class="card-title">📁 Project Identity</div></div><div class="card-body"><div class="form-grid">
+      <div class="form-group full"><label class="form-label">Project name</label><input class="form-input" type="text" placeholder="e.g. Cornerstone Stop — Building A & B" value="${esc(p.name)}" oninput="setProj('name',this.value)"></div>
+      <div class="form-group full"><label class="form-label">Property address</label><input class="form-input" type="text" placeholder="e.g. 110 Corner Meadows Manor NE, Calgary, AB" value="${esc(p.address)}" oninput="setProj('address',this.value)"></div>
+      <div class="form-group"><label class="form-label">CSG project reference</label><input class="form-input" type="text" placeholder="e.g. C25074" value="${esc(p.csgRef)}" oninput="setProj('csgRef',this.value)"></div>
+      <div class="form-group"><label class="form-label">Report type</label><select class="form-select" onchange="setProj('reportType',this.value)"><option ${p.reportType==='Preliminary Report'?'selected':''}>Preliminary Report</option><option ${p.reportType==='Progress Report'?'selected':''}>Progress Report</option></select></div>
+      <div class="form-group"><label class="form-label">Report number</label><input class="form-input" type="text" placeholder="e.g. #7" value="${esc(p.reportNumber)}" oninput="setProj('reportNumber',this.value)"></div>
+      <div class="form-group"><label class="form-label">Report date</label><input class="form-input" type="date" value="${esc(p.reportDate)}" oninput="setProj('reportDate',this.value)"></div>
+      <div class="form-group"><label class="form-label">Site visit date</label><input class="form-input" type="date" value="${esc(p.siteVisitDate)}" oninput="setProj('siteVisitDate',this.value)"></div>
+      <div class="form-group"><label class="form-label">CSG contact / signatory</label><input class="form-input" type="text" placeholder="e.g. Chris Holden, PQS, MRICS, GSC" value="${esc(p.csgContact)}" oninput="setProj('csgContact',this.value)"></div>
+    </div></div></div>
+    <div class="two-col">
+      <div class="card"><div class="card-header"><div class="card-title">🏦 Lender</div></div><div class="card-body"><div class="form-grid">
+        <div class="form-group full"><label class="form-label">Lender name</label><input class="form-input" type="text" placeholder="e.g. National Bank of Canada" value="${esc(p.lender)}" oninput="setProj('lender',this.value)"></div>
+        <div class="form-group full"><label class="form-label">Lender contact</label><input class="form-input" type="text" placeholder="e.g. Anca Ivanov" value="${esc(p.lenderContact)}" oninput="setProj('lenderContact',this.value)"></div>
+      </div></div></div>
+      <div class="card"><div class="card-header"><div class="card-title">🏗 Borrower & Loan</div></div><div class="card-body"><div class="form-grid">
+        <div class="form-group full"><label class="form-label">Borrower name</label><input class="form-input" type="text" placeholder="e.g. 2219367 Alberta Ltd." value="${esc(p.borrower)}" oninput="setProj('borrower',this.value)"></div>
+        <div class="form-group"><label class="form-label">Loan amount</label><input class="form-input" type="text" placeholder="$10,400,000" value="${esc(p.loanAmount)}" oninput="setProj('loanAmount',this.value)"></div>
+        <div class="form-group"><label class="form-label">Interest rate</label><input class="form-input" type="text" placeholder="Prime + 1.25%" value="${esc(p.interestRate)}" oninput="setProj('interestRate',this.value)"></div>
+        <div class="form-group full"><label class="form-label">Anticipated completion</label><input class="form-input" type="date" value="${esc(p.completionDate)}" oninput="setProj('completionDate',this.value)"></div>
+      </div></div></div>
+    </div>
+    <div style="display:flex;justify-content:flex-end;padding-bottom:8px"><button class="btn btn-primary" onclick="switchSection('s1_1')">Save & continue to Section 1 →</button></div>
+  </div>`;
+}
+
+function setProj(key,val){
+  STATE.project[key]=val;
+  if(key==='name') document.getElementById('sb-project-name').textContent=val||'New Project';
+  if(key==='reportType'||key==='reportNumber') document.getElementById('sb-project-sub').textContent=STATE.project.reportType+(STATE.project.reportNumber?' '+STATE.project.reportNumber:'');
+  scheduleSave();
+}
+
+function renderStaticSection(def,sec){
+  return `<div class="section-header"><div class="section-badge">${def.icon} ${def.badge}</div><h1>${def.title}</h1><p>${def.desc}</p></div>
+  <div class="card"><div class="card-header"><div class="card-title">Standard boilerplate <span class="info-chip">🔒 Edit with care</span></div><button class="btn btn-sm btn-secondary" onclick="copyText('${def.id}')">Copy</button></div>
+  <div class="card-body"><div class="static-banner"><div style="font-size:18px;flex-shrink:0">ℹ</div><p>Pre-populated CSG standard boilerplate. Included unchanged in every report. Edit only if needed for a specific project.</p></div>
+  <div class="textarea-wrap"><textarea class="report-textarea ai-populated" id="ta-${def.id}" oninput="handleTextChange('${def.id}')">${esc(sec.text)}</textarea><div class="char-count" id="cc-${def.id}"></div></div></div></div>`;
+}
+
+function renderUploadSection(def,sec){
+  const hasFiles=sec.files.length>0; const hasText=sec.text.length>0; const isGen=sec.generating;
+  const fileListHTML=hasFiles?`<div class="file-list">${sec.files.map((f,i)=>`<div class="file-item"><span class="file-icon">${getFileIcon(f.name)}</span><div class="file-info"><div class="file-name">${esc(f.name)}</div><div class="file-size">${formatSize(f.size)}</div></div><span class="file-status">Ready</span><button class="file-remove" onclick="removeFile('${def.id}',${i})">✕</button></div>`).join('')}</div>`:'';;
+  const aiStatusHTML=isGen?`<div class="ai-status"><div class="spinner"></div><span>AI is analysing your document…</span></div>`:hasText?`<div class="ai-status"><span style="color:var(--green)">✓</span><span style="color:var(--green)">Section text generated. Review and edit below.</span></div>`:`<div class="ai-status"><span>${hasFiles?'Document ready — click Generate.':'Upload a document, then click Generate.'}</span></div>`;
+  return `<div class="section-header"><div class="section-badge">${def.icon} ${def.badge}</div><h1>${def.title}</h1><p>${def.desc}</p></div>
+  <div class="card" style="margin-bottom:16px"><div class="card-header"><div class="card-title">📎 Document Upload</div><span class="info-chip">${def.acceptsLabel}</span></div>
+  <div class="card-body"><div class="upload-zone" id="drop-${def.id}" ondragover="handleDragOver(event,'${def.id}')" ondragleave="handleDragLeave(event,'${def.id}')" ondrop="handleDrop(event,'${def.id}')">
+    <input type="file" accept="${def.accepts}" multiple onchange="handleFileSelect(event,'${def.id}')">
+    <div class="upload-icon">📁</div><div class="upload-title">${def.uploadTitle}</div>
+    <div class="upload-sub">Drag & drop or click to browse</div><div class="upload-accepts">${def.accepts}</div>
+  </div>${fileListHTML}</div></div>
+  <div class="card" style="margin-bottom:16px"><div class="card-header"><div class="card-title"><span class="ai-badge">✦ AI</span> Generate section text</div></div>
+  <div class="card-body"><div class="ai-action-bar">${aiStatusHTML}<button class="btn btn-ai" onclick="generateSection('${def.id}')" ${isGen?'disabled':''}>${isGen?'<span class="spinner" style="width:12px;height:12px;border-width:1.5px"></span> Generating…':'✦ Generate with AI'}</button></div>
+  <div style="font-size:11px;color:var(--text3);margin-top:4px">AI will analyse your uploaded document and generate professionally-worded report text in CSG's standard style.</div></div></div>
+  <div class="card"><div class="card-header"><div class="card-title">Report text — ${def.nav} ${hasText?'<span class="info-chip" style="background:#DCFCE7;color:var(--green)">✓ Generated</span>':''}</div>
+  <div style="display:flex;gap:6px">${hasText?`<button class="btn btn-sm btn-secondary" onclick="copyText('${def.id}')">Copy</button>`:''}<button class="btn btn-sm btn-ghost" onclick="markDone('${def.id}')" ${!hasText?'disabled':''}>Mark done</button></div></div>
+  <div class="card-body"><div class="textarea-wrap"><textarea class="report-textarea ${hasText?'ai-populated':''}" id="ta-${def.id}" placeholder="Generated text will appear here after AI analysis..." oninput="handleTextChange('${def.id}')">${esc(sec.text)}</textarea><div class="char-count" id="cc-${def.id}"></div></div>
+  <div class="textarea-actions"><div style="font-size:10px;color:var(--text3)">Edit directly — changes save automatically to database</div><div>${hasText?`<button class="btn btn-sm btn-danger" onclick="clearText('${def.id}')">Clear text</button>`:''}</div></div></div></div>`;
+}
+
+// ── FILE HANDLING ─────────────────────────────────────────────
+function handleDragOver(e,id){e.preventDefault();document.getElementById(`drop-${id}`)?.classList.add('drag-over');}
+function handleDragLeave(e,id){document.getElementById(`drop-${id}`)?.classList.remove('drag-over');}
+function handleDrop(e,id){e.preventDefault();document.getElementById(`drop-${id}`)?.classList.remove('drag-over');addFiles(id,Array.from(e.dataTransfer.files));}
+function handleFileSelect(e,id){addFiles(id,Array.from(e.target.files));}
+function addFiles(id,files){files.forEach(f=>STATE.sections[id].files.push(f));if(STATE.sections[id].status==='empty')STATE.sections[id].status='partial';renderContent();}
+function removeFile(id,idx){STATE.sections[id].files.splice(idx,1);if(!STATE.sections[id].files.length&&STATE.sections[id].status==='partial')STATE.sections[id].status='empty';renderContent();}
+function getFileIcon(n){const icons={pdf:'📄',xlsx:'📊',xls:'📊',csv:'📊',docx:'📝',txt:'📃',jpg:'🖼',jpeg:'🖼',png:'🖼',heic:'🖼',webp:'🖼'};return icons[n.split('.').pop().toLowerCase()]||'📁';}
+function formatSize(b){return b<1024?b+' B':b<1048576?(b/1024).toFixed(1)+' KB':(b/1048576).toFixed(1)+' MB';}
+
+async function extractFileContent(file){
+  const ext=file.name.split('.').pop().toLowerCase();
+  if(['jpg','jpeg','png','webp','heic'].includes(ext)) return new Promise(r=>{const fr=new FileReader();fr.onload=e=>r({type:'image',data:e.target.result.split(',')[1],mediaType:file.type||'image/jpeg'});fr.readAsDataURL(file);});
+  if(ext==='pdf'&&typeof pdfjsLib!=='undefined'){
+    try{
+      const ab=await file.arrayBuffer(); const pdf=await pdfjsLib.getDocument({data:ab}).promise;
+      let text=`[PDF: ${file.name}, ${pdf.numPages} pages]\n\n`;
+      for(let i=1;i<=Math.min(pdf.numPages,15);i++){const page=await pdf.getPage(i);const ct=await page.getTextContent();const pt=ct.items.map(x=>x.str).join(' ');if(pt.trim())text+=`--- Page ${i} ---\n${pt}\n\n`;}
+      return{type:'text',data:text};
+    }catch{const ab=await file.arrayBuffer();const b64=btoa(String.fromCharCode(...new Uint8Array(ab)));return{type:'pdf_b64',data:b64};}
+  }
+  if(['xlsx','xls'].includes(ext)&&typeof XLSX!=='undefined'){
+    try{const ab=await file.arrayBuffer();const wb=XLSX.read(ab,{type:'array'});let text=`[Excel: ${file.name}]\n\n`;wb.SheetNames.slice(0,5).forEach(n=>{const csv=XLSX.utils.sheet_to_csv(wb.Sheets[n],{blankrows:false});if(csv.trim())text+=`=== Sheet: ${n} ===\n${csv.substring(0,4000)}\n\n`;});return{type:'text',data:text};}
+    catch{return{type:'text',data:`[Excel: ${file.name} — unable to parse]`};}
+  }
+  if(['csv','txt'].includes(ext)) return new Promise(r=>{const fr=new FileReader();fr.onload=e=>r({type:'text',data:`[${ext.toUpperCase()}: ${file.name}]\n\n${e.target.result.substring(0,8000)}`});fr.readAsText(file);});
+  return{type:'text',data:`[File: ${file.name}, ${formatSize(file.size)}]`};
+}
+
+// ── AI GENERATION ─────────────────────────────────────────────
+async function generateSection(id){
+  const def=SECTIONS.find(s=>s.id===id); const sec=STATE.sections[id];
+  sec.generating=true; renderContent();
+  try{
+    const p=STATE.project;
+    const ctx=`Project: ${p.name||'Unknown'}\nAddress: ${p.address||'Not provided'}\nLender: ${p.lender||'Not provided'} — Contact: ${p.lenderContact||'Not provided'}\nBorrower: ${p.borrower||'Not provided'}\nLoan Amount: ${p.loanAmount||'Not provided'}\nInterest Rate: ${p.interestRate||'Not provided'}\nReport Type: ${p.reportType} ${p.reportNumber||''}\nReport Date: ${p.reportDate||'Not provided'}\nSite Visit Date: ${p.siteVisitDate||'Not provided'}\nCSG Reference: ${p.csgRef||'Not provided'}\nCSG Signatory: ${p.csgContact||'Not provided'}\nAnticipated Completion: ${p.completionDate||'Not provided'}`;
+    const blocks=[{type:'text',text:`PROJECT CONTEXT:\n${ctx}\n\n---\n\nDOCUMENT(S) UPLOADED:\n`}];
+    if(sec.files.length>0){
+      for(const file of sec.files){
+        const ex=await extractFileContent(file);
+        if(ex.type==='text') blocks.push({type:'text',text:ex.data});
+        else if(ex.type==='image'){blocks.push({type:'text',text:`[Image: ${file.name}]\n`});blocks.push({type:'image',source:{type:'base64',media_type:ex.mediaType,data:ex.data}});}
+        else if(ex.type==='pdf_b64') blocks.push({type:'document',source:{type:'base64',media_type:'application/pdf',data:ex.data}});
+      }
+    }else{blocks.push({type:'text',text:'[No document uploaded — generate from project context and section requirements. Use [brackets] where specific figures are needed.]'});}
+    blocks.push({type:'text',text:'\n\n---\n\nBased on the above, please generate the report section text as instructed.'});
+    const sys=`You are a senior Quantity Surveyor at Cuthbert Smith Group Inc. (CSG), a professional quantity surveying and construction cost management firm in Alberta, Canada. You specialize in mortgage monitoring reports for institutional construction lenders.\n\nCSG writing style:\n- Professional, formal, third-person\n- Concise and factual — no unnecessary padding\n- Standard Canadian construction industry terminology\n- Specific figures stated precisely; uncertainties flagged with [brackets]\n- Reports addressed to the lender; borrower mentioned in third person\n- Standard phrases: "We have reviewed...", "We confirm...", "We have calculated..."`;
+    const res=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:1000,system:sys+'\n\n'+def.prompt,messages:[{role:'user',content:blocks}]})});
+    if(!res.ok){const err=await res.json().catch(()=>({}));throw new Error(err.error?.message||`API error ${res.status}`);}
+    const data=await res.json();
+    sec.text=data.content.filter(b=>b.type==='text').map(b=>b.text).join('');
+    sec.status='partial'; scheduleSave();
+  }catch(e){sec.text=`[Error generating text: ${e.message}]\n\nPlease try again or enter text manually.`;}
+  sec.generating=false; renderContent(); renderNav();
+  setTimeout(()=>{document.getElementById(`ta-${id}`)?.scrollIntoView({behavior:'smooth',block:'nearest'});},100);
+}
+
+// ── TEXT HANDLERS ─────────────────────────────────────────────
+function handleTextChange(id){const ta=document.getElementById(`ta-${id}`);if(!ta)return;STATE.sections[id].text=ta.value;updateCharCount(id);scheduleSave();}
+function updateCharCount(id){const ta=document.getElementById(`ta-${id}`);const cc=document.getElementById(`cc-${id}`);if(ta&&cc)cc.textContent=ta.value.length+' chars';}
+function clearText(id){STATE.sections[id].text='';STATE.sections[id].status=STATE.sections[id].files.length>0?'partial':'empty';renderContent();renderNav();scheduleSave();}
+function copyText(id){const ta=document.getElementById(`ta-${id}`);if(ta)navigator.clipboard.writeText(ta.value).then(()=>showToast('Copied!'));}
+function markDone(id){if(!STATE.sections[id])return;STATE.sections[id].status=STATE.sections[id].status==='done'?'partial':'done';renderNav();scheduleSave();}
+function clearSection(){const id=STATE.activeSection;if(id==='setup'||!STATE.sections[id])return;const def=SECTIONS.find(s=>s.id===id);if(def?.type==='static')return;STATE.sections[id].text='';STATE.sections[id].files=[];STATE.sections[id].status='empty';renderContent();renderNav();scheduleSave();}
+
+// ── COMPILE ───────────────────────────────────────────────────
+function openCompile(){
+  const p=STATE.project;
+  const rt=`${p.reportType}${p.reportNumber?' '+p.reportNumber:''}`;
+  document.getElementById('modal-report-type').textContent=rt+' — '+(p.name||'Draft')+' — '+(p.reportDate||'No date');
+  const rd=p.reportDate?new Date(p.reportDate).toLocaleDateString('en-CA',{year:'numeric',month:'long',day:'numeric'}):'[Date]';
+  const sectionHTML=SECTIONS.filter(s=>s.id!=='setup'&&s.type!=='group'&&s.type!=='form').map(s=>{
+    const sec=STATE.sections[s.id]; const hasText=sec?.text?.trim().length>0;
+    return `<div class="report-section"><div class="report-section-header"><span class="report-section-num">${s.badge}</span><span class="report-section-title">${s.title}</span></div><div class="report-section-content">${hasText?escapeHtml(sec.text):'<span class="report-section-empty">No text generated for this section yet.</span>'}</div></div>`;
+  }).join('');
+  document.getElementById('modal-body').innerHTML=`<div class="report-doc" id="compiled-report">
+    <div class="report-doc-header">
+      <div class="report-doc-logo-area"><div class="report-doc-logo-box"><svg viewBox="0 0 24 24"><path d="M12 2L2 19h20L12 2zm0 4l7 13H5L12 6z"/></svg></div><span class="report-doc-company">Cuthbert Smith Group Inc.</span></div>
+      <div class="report-doc-meta">More than measurement. Results.</div>
+      <div style="margin-top:16px;text-align:left;border-top:1px solid var(--border);padding-top:14px">
+        ${p.csgRef?`<div style="font-size:11px;color:var(--text3);margin-bottom:6px">Our ref: ${esc(p.csgRef)}</div>`:''}
+        <div style="font-size:12px;color:var(--text2);margin-bottom:12px">${rd}</div>
+        <div style="font-size:12px;font-weight:600">${esc(p.lender||'[Lender Name]')}</div>
+        <div style="font-size:12px;color:var(--text2)">Attention: ${esc(p.lenderContact||'[Contact Name]')}</div>
+        <div style="font-size:12px;color:var(--text2);margin-top:14px">Dear ${esc(p.lenderContact||'Sir/Madam')},</div>
+      </div>
+      <div class="report-doc-title">${esc(p.name||'[Project Name]')}</div>
+      <div style="font-size:12px;color:var(--text3)">${esc(p.address||'[Project Address]')}</div>
+      <div style="font-size:11px;margin-top:10px;padding:8px 14px;background:var(--orange-light);border-radius:6px;color:var(--orange-dark)">We are pleased to present our ${esc(rt)} for the above noted project. This report has been prepared for the exclusive use of the project lender, ${esc(p.lender||'[Lender Name]')}. Borrower: ${esc(p.borrower||'[Borrower Name]')}.</div>
+    </div>
+    ${sectionHTML}
+    <div class="report-section" style="border-bottom:none;margin-bottom:0">
+      <div style="font-size:12px;color:var(--text2)">Yours truly,</div>
+      <div style="font-size:13px;font-weight:600;margin-top:16px">Cuthbert Smith Group Inc.</div>
+      <div style="margin-top:30px;font-size:12px;color:var(--text2);border-top:1px solid var(--border);padding-top:10px;width:200px">Per: ${esc(p.csgContact||'[CSG Signatory]')}</div>
+    </div>
+  </div>`;
+  document.getElementById('compile-modal').classList.add('open');
+}
+function closeCompile(){document.getElementById('compile-modal').classList.remove('open');}
+function copyReport(){const el=document.getElementById('compiled-report');if(el)navigator.clipboard.writeText(el.innerText).then(()=>showToast('Report copied to clipboard'));}
+function printReport(){
+  const el=document.getElementById('compiled-report');if(!el)return;
+  const w=window.open('','_blank');
+  w.document.write(`<!DOCTYPE html><html><head><title>CSG Report</title><style>body{font-family:'DM Sans',system-ui,sans-serif;max-width:700px;margin:40px auto;color:#1a1a17;line-height:1.6;font-size:13px}.report-section{margin-bottom:28px;padding-bottom:28px;border-bottom:1px solid #eee}.report-section-header{display:flex;align-items:baseline;gap:12px;margin-bottom:10px}.report-section-num{background:#FAE8D0;color:#C06A0A;padding:2px 8px;border-radius:4px;font-size:10px;font-weight:700;letter-spacing:.05em}.report-section-title{font-size:16px;font-weight:500}.report-section-content{font-size:13px;color:#5A5955;line-height:1.7;white-space:pre-wrap}.report-section-empty{font-style:italic;color:#888}</style></head><body>${el.innerHTML}</body></html>`);
+  w.document.close();w.print();
+}
+
+// ── UTILS ─────────────────────────────────────────────────────
+function escapeHtml(s){return(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+function esc(s){return escapeHtml(s);}
+function showToast(msg){const t=document.createElement('div');t.style.cssText='position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#141412;color:white;padding:8px 18px;border-radius:8px;font-size:12px;z-index:9999;animation:fadeIn .2s ease';t.textContent=msg;document.body.appendChild(t);setTimeout(()=>t.remove(),2000);}
+
+document.addEventListener('keydown',e=>{if(e.key==='Escape')closeCompile();});
+document.getElementById('compile-modal').addEventListener('click',function(e){if(e.target===this)closeCompile();});
+
+// ── INIT ──────────────────────────────────────────────────────
+(async()=>{
+  try{
+    const{error}=await db.from('projects').select('id').limit(1);
+    if(error) throw error;
+    setLoading(false);
+    loadProjectsList();
+  }catch(e){
+    document.getElementById('loading-sub').textContent='Database error: '+e.message;
+    document.getElementById('loading-sub').style.color='#C0392B';
+    console.error('DB connection error:',e);
+  }
+})();
+</script>
+</body>
+</html>
