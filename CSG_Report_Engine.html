@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- saved from url=(0066)file:///Users/terencearsenault/Downloads/CSG_Report_Engine_17.html -->
+<!-- saved from url=(0063)file:///Users/terencearsenault/Downloads/CSG_Report_Engine.html -->
 <html lang="en"><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
 
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -370,14 +370,21 @@ const db = {
         return{data:arr[0],error:r.ok?null:data};
       },
       async upsert(body){
-        // Use PATCH to update existing row by id
+        // PATCH by id — remove id from body to avoid conflict
         const id=body.id;
-        const r=await fetch(`${base}?id=eq.${encodeURIComponent(id)}`,{method:'PATCH',headers:{...h,'Prefer':'return=representation'},body:JSON.stringify(body)});
-        const data=await r.json(); return{data,error:r.ok?null:data};
+        const {id:_removed, ...rest}=body;
+        const r=await fetch(`${base}?id=eq.${encodeURIComponent(id)}`,{method:'PATCH',headers:{...h,'Prefer':'return=representation'},body:JSON.stringify(rest)});
+        if(!r.ok){const err=await r.json();console.error('Upsert error:',err);return{data:null,error:err};}
+        const data=await r.json(); return{data,error:null};
       },
       async upsertMany(rows){
-        // Batch upsert via POST with on_conflict
-        const r=await fetch(`${base}?on_conflict=project_id,section_id`,{method:'POST',headers:{...h,'Prefer':'return=minimal,resolution=merge-duplicates'},body:JSON.stringify(rows)});
+        // DELETE then INSERT for report_sections to avoid 409 conflicts
+        if(!rows.length) return{data:null,error:null};
+        const projectId=rows[0].project_id;
+        // Delete existing rows for this project first
+        await fetch(`${base}?project_id=eq.${encodeURIComponent(projectId)}`,{method:'DELETE',headers:h});
+        // Then insert fresh
+        const r=await fetch(base,{method:'POST',headers:{...h,'Prefer':'return=minimal'},body:JSON.stringify(rows)});
         return{data:null,error:r.ok?null:await r.json()};
       },
       async delete(field,val){
