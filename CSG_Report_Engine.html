@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- saved from url=(0066)file:///Users/terencearsenault/Downloads/CSG_Report_Engine_16.html -->
+<!-- saved from url=(0063)file:///Users/terencearsenault/Downloads/CSG_Report_Engine.html -->
 <html lang="en"><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
 
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -7,7 +7,6 @@
 <link href="./CSG Report Engine_files/css2" rel="stylesheet">
 <script src="./CSG Report Engine_files/pdf.min.js"></script>
 <script src="./CSG Report Engine_files/xlsx.full.min.js"></script>
-<script src="./CSG Report Engine_files/supabase.js"></script>
 <script src="./CSG Report Engine_files/mammoth.browser.min.js"></script>
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
@@ -433,24 +432,53 @@ html,body{height:100%;overflow:hidden;background:var(--bg);font-family:'DM Sans'
 // ── SUPABASE ──────────────────────────────────────────────────
 const SUPABASE_URL = 'https://sukbelpzqpaiqkxslzky.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InN1a2JlbHB6cXBhaXFreHNsemt5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY2NTUyNjYsImV4cCI6MjA5MjIzMTI2Nn0.eKGHdYNfRcGYawctY7JVhOJPh18orBoSVFmj5JLkRM0';
-let db;
-function initSupabase(){
-  try{
-    if(typeof supabase !== 'undefined'){
-      // unpkg UMD build exposes supabase.createClient directly
-      if(typeof supabase.createClient === 'function'){
-        db = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-        return true;
+
+// Lightweight Supabase REST client — no CDN needed
+const db = {
+  _headers:{'Content-Type':'application/json','apikey':SUPABASE_ANON_KEY,'Authorization':'Bearer '+SUPABASE_ANON_KEY},
+  from(table){
+    const base=`${SUPABASE_URL}/rest/v1/${table}`;
+    const h=this._headers;
+    return {
+      async select(cols='*'){
+        const r=await fetch(`${base}?select=${cols}`,{headers:{...h,'Accept':'application/json'}});
+        const data=await r.json(); return{data,error:r.ok?null:data};
+      },
+      async selectWhere(cols='*',field,val){
+        const r=await fetch(`${base}?select=${cols}&${field}=eq.${encodeURIComponent(val)}`,{headers:{...h,'Accept':'application/json'}});
+        const data=await r.json(); return{data,error:r.ok?null:data};
+      },
+      async selectSingle(cols='*',field,val){
+        const r=await fetch(`${base}?select=${cols}&${field}=eq.${encodeURIComponent(val)}&limit=1`,{headers:{...h,'Accept':'application/json','Accept-Profile':'public'}});
+        const arr=await r.json();
+        if(!r.ok) return{data:null,error:arr};
+        return{data:Array.isArray(arr)?arr[0]||null:arr,error:null};
+      },
+      async insert(body){
+        const r=await fetch(base,{method:'POST',headers:{...h,'Prefer':'return=representation'},body:JSON.stringify(body)});
+        const data=await r.json(); const arr=Array.isArray(data)?data:[data];
+        return{data:arr[0],error:r.ok?null:data};
+      },
+      async upsert(body){
+        const r=await fetch(base,{method:'POST',headers:{...h,'Prefer':'return=representation,resolution=merge-duplicates'},body:JSON.stringify(body)});
+        const data=await r.json(); return{data,error:r.ok?null:data};
+      },
+      async upsertMany(rows){
+        const r=await fetch(base,{method:'POST',headers:{...h,'Prefer':'return=representation,resolution=merge-duplicates'},body:JSON.stringify(rows)});
+        const data=await r.json(); return{data,error:r.ok?null:data};
+      },
+      async delete(field,val){
+        const r=await fetch(`${base}?${field}=eq.${encodeURIComponent(val)}`,{method:'DELETE',headers:h});
+        return{error:r.ok?null:await r.json()};
+      },
+      async order(col,asc=false){
+        const r=await fetch(`${base}?select=*&order=${col}.${asc?'asc':'desc'}`,{headers:{...h,'Accept':'application/json'}});
+        const data=await r.json(); return{data,error:r.ok?null:data};
       }
-      // jsdelivr build may nest it
-      if(supabase.supabase && typeof supabase.supabase.createClient === 'function'){
-        db = supabase.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-        return true;
-      }
-    }
-  }catch(e){ console.error('Supabase init error:',e); }
-  return false;
-}
+    };
+  }
+};
+function initSupabase(){return true;} // no-op, db is ready immediately
 
 if(typeof pdfjsLib !== 'undefined') pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
 
@@ -660,9 +688,9 @@ async function doSave(){
   if(!STATE.currentProjectId) return;
   const p=STATE.project;
   try{
-    await db.from('projects').upsert({id:STATE.currentProjectId,name:p.name,address:p.address,csg_ref:p.csgRef,report_type:p.reportType,report_number:p.reportNumber,report_date:p.reportDate||null,site_visit_date:p.siteVisitDate||null,csg_contact:p.csgContact,anticipated_completion:p.completionDate||null,lender:p.lender,lender_contact:p.lenderContact,borrower:p.borrower,loan_amount:p.loanAmount,interest_rate:p.interestRate,active_sections:JSON.stringify(STATE.activeSections),asset_class:p.assetClass,asset_class_custom:p.assetClassCustom});
+    await db.from('projects').upsert({id:STATE.currentProjectId,name:p.name,address:p.address,csg_ref:p.csgRef,report_type:p.reportType,report_number:p.reportNumber,report_date:p.reportDate||null,site_visit_date:p.siteVisitDate||null,csg_contact:p.csgContact,anticipated_completion:p.completionDate||null,lender:p.lender,lender_contact:p.lenderContact,borrower:p.borrower,loan_amount:p.loanAmount,interest_rate:p.interestRate,active_sections:JSON.stringify(STATE.activeSections),asset_class:p.assetClass||null,asset_class_custom:p.assetClassCustom||null});
     const rows=Object.entries(STATE.sections).map(([sid,sec])=>({project_id:STATE.currentProjectId,section_id:sid,section_text:sec.text||'',status:sec.status||'empty'}));
-    if(rows.length) await db.from('report_sections').upsert(rows,{onConflict:'project_id,section_id'});
+    if(rows.length) await db.from('report_sections').upsertMany(rows);
     setSaveInd('saved');
   }catch(e){console.error('Save error:',e);setSaveInd('');}
 }
@@ -670,15 +698,15 @@ async function doSave(){
 async function loadProject(pid){
   setLoading(true,'Loading project…');
   try{
-    const{data:proj,error:pe}=await db.from('projects').select('*').eq('id',pid).single();
+    const{data:proj,error:pe}=await db.from('projects').selectSingle('*','id',pid);
     if(pe) throw pe;
+    if(!proj) throw new Error('Project not found');
     STATE.currentProjectId=pid;
-    STATE.project={name:proj.name||'',address:proj.address||'',csgRef:proj.csg_ref||'',reportType:proj.report_type||'Progress Report',reportNumber:proj.report_number||'',reportDate:proj.report_date||new Date().toISOString().split('T')[0],siteVisitDate:proj.site_visit_date||'',csgContact:proj.csg_contact||'',completionDate:proj.anticipated_completion||'',lender:proj.lender||'',lenderContact:proj.lender_contact||'',borrower:proj.borrower||'',loanAmount:proj.loan_amount||'',interestRate:proj.interest_rate||'',assetClass:proj.asset_class||'',assetClassCustom:proj.asset_class_custom||''};
-    // Restore active sections order if saved
+    STATE.project={name:proj.name||'',address:proj.address||'',csgRef:proj.csg_ref||'',reportType:proj.report_type||'Budget Review Report',reportNumber:proj.report_number||'',reportDate:proj.report_date||new Date().toISOString().split('T')[0],siteVisitDate:proj.site_visit_date||'',csgContact:proj.csg_contact||'',completionDate:proj.anticipated_completion||'',lender:proj.lender||'',lenderContact:proj.lender_contact||'',borrower:proj.borrower||'',loanAmount:proj.loan_amount||'',interestRate:proj.interest_rate||'',assetClass:proj.asset_class||'',assetClassCustom:proj.asset_class_custom||''};
     if(proj.active_sections){try{STATE.activeSections=JSON.parse(proj.active_sections);}catch{STATE.activeSections=[...DEFAULT_ACTIVE_SECTIONS];}}
     else{STATE.activeSections=[...DEFAULT_ACTIVE_SECTIONS];}
     initSections();
-    const{data:secs}=await db.from('report_sections').select('*').eq('project_id',pid);
+    const{data:secs}=await db.from('report_sections').selectWhere('*','project_id',pid);
     (secs||[]).forEach(r=>{if(STATE.sections[r.section_id]){STATE.sections[r.section_id].text=r.section_text||STATE.sections[r.section_id].text;STATE.sections[r.section_id].status=r.status||STATE.sections[r.section_id].status;}});
     showEditorView(); updateSidebarProject(); renderNav(); switchSection('setup');
   }catch(e){console.error(e);showToast('Error loading project: '+e.message);}
@@ -688,8 +716,9 @@ async function loadProject(pid){
 async function createNewProject(){
   setLoading(true,'Creating project…');
   try{
-    const{data,error}=await db.from('projects').insert({name:'New Project',report_type:'Budget Review Report',report_date:new Date().toISOString().split('T')[0],active_sections:JSON.stringify(REPORT_TYPE_TEMPLATES['Budget Review Report'])}).select().single();
-    if(error) throw error;
+    const{data,error}=await db.from('projects').insert({name:'New Project',report_type:'Budget Review Report',report_date:new Date().toISOString().split('T')[0],active_sections:JSON.stringify(REPORT_TYPE_TEMPLATES['Budget Review Report'])});
+    if(error) throw new Error(JSON.stringify(error));
+    if(!data||!data.id) throw new Error('No project ID returned');
     await loadProject(data.id);
   }catch(e){console.error(e);showToast('Error creating project: '+e.message);setLoading(false);}
 }
@@ -697,7 +726,7 @@ async function createNewProject(){
 async function deleteProject(id,e){
   e.stopPropagation();
   if(!confirm('Delete this project and all its data? This cannot be undone.')) return;
-  const{error}=await db.from('projects').delete().eq('id',id);
+  const{error}=await db.from('projects').delete('id',id);
   if(error){showToast('Error deleting project');return;}
   if(STATE.currentProjectId===id){STATE.currentProjectId=null;initSections();}
   loadProjectsList();
@@ -707,8 +736,8 @@ async function loadProjectsList(){
   showProjectsView();
   const grid=document.getElementById('projects-grid');
   grid.innerHTML='<div style="grid-column:1/-1;text-align:center;padding:40px;color:var(--text3)"><div class="spinner" style="margin:0 auto 12px"></div><div>Loading projects…</div></div>';
-  const{data:projects,error}=await db.from('projects').select('*').order('updated_at',{ascending:false});
-  if(error){grid.innerHTML='<div style="color:var(--red);padding:20px">Error loading projects: '+error.message+'</div>';return;}
+  const{data:projects,error}=await db.from('projects').order('updated_at',false);
+  if(error){grid.innerHTML='<div style="color:var(--red);padding:20px">Error loading projects: '+JSON.stringify(error)+'</div>';return;}
   const cards=(projects||[]).map(p=>`
     <div class="project-card" onclick="loadProject('${p.id}')">
       <button class="pc-delete" onclick="deleteProject('${p.id}',event)">✕</button>
@@ -716,7 +745,7 @@ async function loadProjectsList(){
       <div class="pc-name">${esc(p.name||'Unnamed Project')}</div>
       <div class="pc-address">${esc(p.address||'No address set')}</div>
       <div class="pc-meta">
-        <span class="pc-type">${esc(p.report_type||'Progress Report')}${p.report_number?' '+esc(p.report_number):''}</span>
+        <span class="pc-type">${esc(p.report_type||'Budget Review Report')}${p.report_number?' '+esc(p.report_number):''}</span>
         <span class="pc-date">${p.updated_at?new Date(p.updated_at).toLocaleDateString('en-CA'):'—'}</span>
       </div>
     </div>`).join('');
@@ -1323,8 +1352,8 @@ document.getElementById('compile-modal').addEventListener('click',function(e){if
     return;
   }
   try{
-    const{error}=await db.from('projects').select('id').limit(1);
-    if(error) throw error;
+    const{data,error}=await db.from('projects').select('id');
+    if(error) throw new Error(JSON.stringify(error));
     setLoading(false);
     loadProjectsList();
   }catch(e){
